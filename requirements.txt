@@ -1,0 +1,22 @@
+# Slim runtime for the Vercel demo (serverless). Full set: backend/requirements.txt.
+# Left out on purpose: torch/transformers/kornia/timm (VISION_BACKEND=models), Postgres, Redis/RQ, S3, Vault, PKCS#11, SMTP.
+fastapi==0.162.0
+SQLAlchemy==2.1.6
+pydantic==2.14.1
+python-multipart==0.0.32
+PyJWT==2.15.1
+cryptography==50.0.2
+PyYAML==6.0.3
+pikepdf==10.17.0
+pdfminer.six==20260107
+pyHanko==0.38.0
+pypdfium2==5.14.0
+pillow==13.0.0
+opencv-python-headless==5.0.0.93
+numpy==2.5.4
+networkx==3.7
+reportlab==5.1.0
+python-docx==1.2.0
+pytesseract==0.3.13
+httpx==0.28.1
+prometheus_client==0.26.0

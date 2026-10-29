@@ -68,6 +68,7 @@ def run_job(job_id: int, token_ttl: int | None = None):
         jd.mkdir(exist_ok=True)
         env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(BACKEND_DIR), "HOME": str(jd), "OMP_NUM_THREADS": "1",
                "OPENBLAS_NUM_THREADS": "1", "LANG": "C.UTF-8", "SEALCHECK_DEMO_PACE_MS": str(DEMO_PACE_MS)}
+        env.update({k: os.environ[k] for k in ("SEALCHECK_WORKER_SYSPATH", "SEALCHECK_DATA_DIR") if os.environ.get(k)})
         t0 = time.time()
         _progress(s, job, "3 CDR + sandbox", "running")
         env["SEALCHECK_SANDBOX"] = sandbox.active_backend()
@@ -320,7 +321,7 @@ def enqueue(document_id: int) -> int:
     return jid
 
 
-QUEUE_BACKEND = os.environ.get("QUEUE_BACKEND", "thread")  # thread (dev) | rq (Redis) | db (separate worker polls jobs table)
+QUEUE_BACKEND = os.environ.get("QUEUE_BACKEND", "thread")  # thread (dev) | rq (Redis) | db (separate worker polls jobs table) | inline (serverless demo)
 
 
 def run_job_task(jid: int):
@@ -336,6 +337,9 @@ def _submit(jid):
         return
     if QUEUE_BACKEND == "db":
         return  # queue_worker --db claims queued rows itself
+    if QUEUE_BACKEND == "inline":  # serverless demo (Vercel): finish the job inside the request, no background threads
+        run_job_task(jid)
+        return
     with _lock:
         if jid in _inflight:
             return

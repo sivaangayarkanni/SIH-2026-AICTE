@@ -14,3 +14,6 @@ clickthrough_report.json
 *.db
 *.db-journal
 .ruff_cache/
+.vercel
+.env*
+!.env.example

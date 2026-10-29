@@ -4,7 +4,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, FileStack, FilePlus2, ClipboardCheck, ListOrdered, ShieldAlert, Network, ShieldCheck, ScrollText, BookOpenCheck, Settings, Workflow, Bell, Wifi, WifiOff, LogOut, Activity, Menu, Moon, Sun, CloudUpload } from 'lucide-react'
 import clsx from 'clsx'
 import { Logo } from './Logo'
-import { GovBar, Tricolour, UtilityBar, Masthead, PortalNav, Breadcrumbs, PortalFooter, useLabel } from './Portal'
+import { DemoNotice, GovBar, Tricolour, UtilityBar, Masthead, PortalNav, Breadcrumbs, PortalFooter, useLabel } from './Portal'
 import { Avatar } from './Avatar'
 import { useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
@@ -139,7 +139,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
   if (theme === 'portal') return (
     <div className="flex min-h-full flex-col bg-bg" data-layout="portal">
-      <GovBar /><Tricolour /><UtilityBar />
+      <GovBar /><Tricolour /><DemoNotice /><UtilityBar />
       <header className="relative z-40 border-b border-line bg-surface" ref={ref}>
         <Masthead right={<div className="flex items-center gap-2">
           <button className="rounded-lg p-2 hover:bg-surface-2 lg:hidden" aria-label="Open menu" onClick={() => setMobile(true)}><Menu className="h-5 w-5" /></button>

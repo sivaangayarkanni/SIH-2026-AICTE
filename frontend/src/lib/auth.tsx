@@ -3,7 +3,7 @@ import { api } from './api'
 import { OidcCfg, startLogin, endSession, refresh, schedule } from './oidc'
 
 export type User = { id: number; email: string; name: string; title: string; role: 'college' | 'officer' | 'senior_officer' | 'admin'; role_label: string; college: string | null; college_id: number | null; avatar_seed: string }
-export type AuthCfg = { mode: 'local' | 'oidc'; idle_timeout_min: number; oidc: OidcCfg | null; demo_accounts: boolean }
+export type AuthCfg = { mode: 'local' | 'oidc'; idle_timeout_min: number; oidc: OidcCfg | null; demo_accounts: boolean; demo_notice?: string | null }
 type Ctx = { user: User | null; loading: boolean; cfg: AuthCfg | null; login: (e: string, p: string) => Promise<User>; sso: (returnTo?: string) => Promise<void>; logout: (reason?: string) => void; setUser: (u: User | null) => void }
 const Ctx = createContext<Ctx>(null!)
 

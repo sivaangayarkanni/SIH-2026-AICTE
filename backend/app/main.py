@@ -187,7 +187,8 @@ def user_out(u: User):
 @app.get("/api/auth/config")
 def auth_config():
     return {"mode": AUTH_MODE, "idle_timeout_min": SESSION_IDLE_MIN,
-            "oidc": oidc.public_config() if AUTH_MODE == "oidc" else None, "demo_accounts": not IS_PROD and AUTH_MODE == "local"}
+            "oidc": oidc.public_config() if AUTH_MODE == "oidc" else None, "demo_accounts": not IS_PROD and AUTH_MODE == "local",
+            "demo_notice": os.environ.get("SEALCHECK_DEMO_NOTICE") or None}
 
 
 @app.post("/api/auth/login")
@@ -688,6 +689,7 @@ async def precheck(file: UploadFile = File(...), doc_type: str = Form(...), u: U
         from . import sandbox
         env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(BACKEND_DIR), "HOME": tmp, "LANG": "C.UTF-8",
                "SEALCHECK_SANDBOX": sandbox.active_backend()}
+        env.update({k: os.environ[k] for k in ("SEALCHECK_WORKER_SYSPATH", "SEALCHECK_DATA_DIR") if os.environ.get(k)})
         p = sandbox.popen({"scratch": tmp, "ro": [str(service.TRUST_DIR)], "rw_files": []}, env)
         out, _err = p.communicate(json.dumps(spec), timeout=90)
         msgs = [json.loads(l) for l in out.splitlines() if l.startswith("{")]

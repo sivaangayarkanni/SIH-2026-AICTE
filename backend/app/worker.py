@@ -4,7 +4,13 @@
   * a 60-second HMAC-signed, job-scoped token which it must verify before touching the file.
 It never touches the database: it reads a read-only file and streams JSON-lines results on stdout.
 Production: run in gVisor/Firecracker with a no-egress network namespace (see docs/SECURITY.md)."""
+import os
 import socket
+import sys
+
+# Serverless hosts (Vercel) install dependencies outside the interpreter's default path; `python -I` ignores
+# PYTHONPATH, so the parent passes the extra import paths explicitly.
+sys.path.extend(p for p in os.environ.get("SEALCHECK_WORKER_SYSPATH", "").split(os.pathsep) if p)
 
 
 def _no_egress(*a, **k):

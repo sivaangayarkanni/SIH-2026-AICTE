@@ -1,3 +1,4 @@
+import { useAuth } from '../lib/auth'
 import { ReactNode, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Contrast, Home, Moon, Sun } from 'lucide-react'
@@ -146,5 +147,16 @@ export function PortalFooter() {
         </div>
       </div>
     </footer>
+  )
+}
+
+/** Shown when the server runs as a hosted public demo (e.g. Vercel): explains what is switched off. */
+export function DemoNotice() {
+  const { cfg } = useAuth()
+  if (!cfg?.demo_notice) return null
+  return (
+    <div role="note" data-testid="demo-notice" className="bg-[#fff4d6] text-[#3d2c00] border-b border-[#e0c56e] text-xs sm:text-sm px-4 py-1.5 text-center">
+      <strong>Demo mode:</strong> {cfg.demo_notice}
+    </div>
   )
 }

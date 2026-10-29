@@ -7,7 +7,7 @@ import { Logo } from '../components/Logo'
 import { Avatar } from '../components/Avatar'
 import { useToast } from '../components/Toast'
 import { THEMES, useTheme } from '../lib/theme'
-import { GovBar, Tricolour, UtilityBar, Masthead, PortalFooter } from '../components/Portal'
+import { DemoNotice, GovBar, Tricolour, UtilityBar, Masthead, PortalFooter } from '../components/Portal'
 
 const ROLE_DESC: Record<string, string> = {
   college: 'Upload documents, see readiness and fix issues', officer: 'Scrutinise the priority queue and decide',
@@ -84,7 +84,7 @@ export default function Login() {
   )
   if (portal) return (
     <div className="flex min-h-full flex-col bg-bg" data-layout="portal">
-      <GovBar /><Tricolour /><UtilityBar />
+      <GovBar /><Tricolour /><DemoNotice /><UtilityBar />
       <header className="border-b border-line bg-surface"><Masthead /></header>
       <main id="main-content" tabIndex={-1} className="mx-auto grid w-full max-w-[1360px] flex-1 gap-6 px-4 py-8 md:px-8 lg:grid-cols-[1fr_560px]">
         <section className="card self-start overflow-hidden p-0">

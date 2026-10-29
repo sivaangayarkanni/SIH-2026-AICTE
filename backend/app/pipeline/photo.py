@@ -5,7 +5,10 @@ object detector into `PhotoMatcher`/`RoomAnalyzer`."""
 import math
 import numpy as np
 import cv2
-import imagehash
+try:
+    import imagehash
+except ImportError:  # slim serverless install: identical pHash computed with numpy below
+    imagehash = None
 from PIL import Image, ExifTags
 
 
@@ -33,13 +36,26 @@ def exif_info(path: str) -> dict:
                 "gps": {"lat": round(lat, 6), "lon": round(lon, 6)} if lat is not None else None}
 
 
+_N = 32
+_DCT = 2 * np.cos(np.pi * np.outer(np.arange(_N), 2 * np.arange(_N) + 1) / (2 * _N))  # scipy DCT-II (unnormalised)
+
+
+def _phash_np(im) -> str:
+    """Same algorithm as imagehash.phash(hash_size=8, highfreq_factor=4)."""
+    px = np.asarray(im.convert("L").resize((_N, _N), Image.Resampling.LANCZOS), dtype=np.float64)
+    low = (_DCT @ px @ _DCT.T)[:8, :8]
+    bits = (low > np.median(low)).flatten()
+    return "".join(f"{int(''.join('1' if b else '0' for b in bits[i:i + 4]), 2):x}" for i in range(0, 64, 4))
+
+
 def phash(path: str) -> str:
     with Image.open(path) as im:
-        return str(imagehash.phash(im.convert("RGB")))
+        im = im.convert("RGB")
+        return str(imagehash.phash(im)) if imagehash else _phash_np(im)
 
 
 def phash_distance(a: str, b: str) -> int:
-    return int(imagehash.hex_to_hash(a) - imagehash.hex_to_hash(b))
+    return bin(int(a, 16) ^ int(b, 16)).count("1")
 
 
 def _gray(path, maxdim=900):

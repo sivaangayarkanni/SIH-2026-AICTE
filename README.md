@@ -102,6 +102,27 @@ Full script with talking points: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 5. **2:15** Open **Security center**. Watch a 60-second job token expire, run the KMS demo, and verify the audit chain.
 6. **2:40** Sign in as **principal.gvce**. Use the readiness pre-check, the rejection helper and the offline queue (DevTools → offline → upload), and switch themes.
 
+## Public demo on Vercel
+
+`vercel.json`, `api/index.py`, `requirements.txt` (slim) and `.python-version` deploy a public demo:
+the Vite build is served from the CDN and FastAPI runs as one Python function. The demo runs with
+`ENV=demo`, `AUTH_MODE=local`, synthetic data, and SQLite in `/tmp` seeded on cold start (about 10 s locally,
+up to about 40 s on Vercel). Jobs run inline (`QUEUE_BACKEND=inline`) and the sandbox uses the `process`
+fallback. Vision is `classic`. The ML models, Postgres, Redis/RQ, S3, Vault and SMTP are not installed.
+A yellow "Demo mode" bar says so (`SEALCHECK_DEMO_NOTICE`). The only secret is
+`SEALCHECK_JWT_SECRET`, set with `vercel env add`.
+
+**Known limit:** each serverless instance has its own SQLite copy. The seeded data is the same everywhere,
+but new uploads and decisions can vanish when a later request reaches another instance. A demo that keeps
+writes needs a shared database and object store (`DATABASE_URL` + `STORAGE_BACKEND=s3`) or the
+single-container Render Blueprint below.
+
+```bash
+vercel link --project sealcheck
+vercel env add SEALCHECK_JWT_SECRET production --sensitive
+vercel deploy --prod
+```
+
 ## Demo deployment (Render)
 
 `render.yaml` defines one Docker web service, `sealcheck-demo`. On every boot it creates a fresh SQLite database with synthetic demo data. It runs with `ENV=demo` and `AUTH_MODE=local`, and the JWT secret is set with `generateValue`. No secrets are committed.
