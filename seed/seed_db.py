@@ -104,6 +104,11 @@ def main():
     s.add(Application(ref="AICTE-26-SVIT-0005", college_id=cmap["SVIT"].id, category="new_course",
                       title="Introduction of New Course / Programme", status="Draft", deadline=now() + timedelta(days=25)))
     s.commit()
+    s.close()
+    import importlib.util, pathlib
+    spec = importlib.util.spec_from_file_location("seed_workflow", pathlib.Path(__file__).with_name("seed_workflow.py"))
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    mod.seed(PASSWORD)  # regions, EVC members, routed applications, undertakings, validity (synthetic, dev only)
     print("Audit chain:", audit.verify_chain())
 
 

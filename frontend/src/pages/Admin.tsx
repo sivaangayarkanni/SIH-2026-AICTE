@@ -23,7 +23,41 @@ export default function Admin() {
         <div className="card card-pad"><div className="text-sm font-semibold">Analysis components</div><div className="mt-2 space-y-1.5">{Object.entries(h.components).map(([k, v]: any) => <div key={k} className="flex items-center justify-between rounded-xl bg-surface-2 px-3 py-2 text-sm"><span>{k}</span><span className="flex items-center gap-1.5 text-muted">{v === false ? <><XCircle className="h-4 w-4 text-slate-400" />not installed (fallback active)</> : <><CheckCircle2 className="h-4 w-4 text-emerald-500" />{v === true ? 'available' : v}</>}</span></div>)}</div></div>
       </div>
       <AccessRequests />
+      <UserAccounts />
     </>
+  )
+}
+
+const REQ_LABEL: Record<string, string> = { college: 'College rep', officer: 'Regional officer', senior_officer: 'Bureau officer', evc_member: 'EVC member', admin: 'Administrator' }
+
+function UserAccounts() {
+  const { user } = useAuth(); const toast = useToast()
+  const [rows, setRows] = useState<any[] | null>(null); const [tmp, setTmp] = useState<any>(null)
+  const load = () => api('/api/admin/users').then(setRows).catch(() => setRows([]))
+  useEffect(() => { if (user?.role === 'admin') load() }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (user?.role !== 'admin') return null
+  const reset = async (r: any) => {
+    if (!window.confirm(`Reset the password for ${r.username || r.email}? Their current sessions end and they must set a new password.`)) return
+    try { setTmp(await api(`/api/admin/users/${r.id}/reset-password`, { method: 'POST' })); load() } catch (e: any) { toast('error', 'Could not reset', e.message) }
+  }
+  const role = async (r: any, v: string) => {
+    try { await api(`/api/admin/users/${r.id}/role`, { method: 'POST', json: { role: v } }); toast('success', 'Role changed', `${r.username || r.email}: ${REQ_LABEL[v] || v}`); load() } catch (e: any) { toast('error', 'Could not change role', e.message); load() }
+  }
+  return (
+    <div className="card card-pad mt-5" data-testid="user-accounts">
+      <div className="text-sm font-semibold">User accounts</div>
+      <p className="mt-1 text-xs text-muted">Role changes and password resets sign the person out everywhere and are written to the audit log.</p>
+      {tmp && <div role="status" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200" data-testid="temp-password">
+        Temporary password for <b>{tmp.username}</b>: <code className="kbd select-all">{tmp.temporary_password}</code><div className="text-xs">{tmp.note}</div>
+        <button className="btn-ghost btn-sm mt-2" onClick={() => setTmp(null)}>I have passed it on — hide</button></div>}
+      {!rows ? <Skeleton className="mt-3 h-24" /> : <div className="mt-3 max-h-[420px] overflow-auto"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted"><th className="py-1.5 pr-3">User</th><th className="pr-3">Username</th><th className="pr-3">Role</th><th className="pr-3">Last sign-in</th><th /></tr></thead>
+        <tbody>{rows.map((r) => <tr key={r.id} className="border-t border-line">
+          <td className="py-1.5 pr-3">{r.name}<div className="text-xs text-muted">{r.email}</div></td><td className="pr-3 font-mono text-xs">{r.username || '—'}{r.locked && <span className="chip ml-1 bg-red-100 text-red-800">locked</span>}</td>
+          <td className="pr-3">{r.id === user.id ? r.role_label : <select aria-label={`Role for ${r.email}`} className="input py-1 text-xs" value={r.role} onChange={(e) => role(r, e.target.value)}>
+            {['pending', 'college', 'officer', 'senior_officer', 'evc_member', 'admin'].map((x) => <option key={x} value={x} disabled={x === 'college' && !r.college_id}>{x === 'pending' ? 'No access (pending)' : REQ_LABEL[x]}</option>)}</select>}</td>
+          <td className="pr-3 text-xs">{r.last_login_at ? new Date(r.last_login_at + 'Z').toLocaleString('en-IN') : '—'}</td>
+          <td className="py-1.5">{r.id !== user.id && <button className="btn-ghost btn-sm" onClick={() => reset(r)}>Reset password</button>}</td></tr>)}</tbody></table></div>}
+    </div>
   )
 }
 
@@ -49,13 +83,13 @@ function AccessRequests() {
         <div className="mt-3 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted"><th className="py-1.5 pr-3">Person</th><th className="pr-3">Requested</th><th className="pr-3">Institution / office</th><th className="pr-3">Contact</th><th className="pr-3">Status</th><th /></tr></thead>
           <tbody>{rows.map((r) => <tr key={r.user_id} className="border-t border-line align-top">
             <td className="py-2 pr-3"><b>{r.full_name || '(form not submitted)'}</b><div className="text-xs text-muted">{r.designation}</div></td>
-            <td className="pr-3">{r.requested_role === 'officer' ? 'AICTE officer' : r.requested_role === 'college' ? 'College rep' : '–'}</td>
+            <td className="pr-3">{REQ_LABEL[r.requested_role] || '–'}</td>
             <td className="pr-3">{r.institution_name}<div className="text-xs text-muted">{r.aicte_id} · {r.state}</div></td>
             <td className="pr-3">{r.email}<div className="text-xs text-muted">{r.phone}</div></td>
             <td className="pr-3">{r.status}{r.decided_by && <div className="text-xs text-muted">{r.decided_by}</div>}</td>
             <td className="whitespace-nowrap py-2">{r.status === 'pending' && <div className="flex gap-1">
-              {r.requested_role === 'officer' ? <><button className="btn-primary btn-sm" disabled={busy === r.user_id} onClick={() => act(r, true, 'officer')}>Approve officer</button><button className="btn-ghost btn-sm" disabled={busy === r.user_id} onClick={() => act(r, true, 'senior_officer')}>as senior</button></>
-                : <button className="btn-primary btn-sm" disabled={busy === r.user_id} onClick={() => act(r, true, 'college')}>Approve</button>}
+              <button className="btn-primary btn-sm" data-testid={`approve-${r.user_id}`} disabled={busy === r.user_id} onClick={() => act(r, true, r.requested_role)}>Approve as {REQ_LABEL[r.requested_role] || r.requested_role}</button>
+              {r.requested_role === 'officer' && <button className="btn-ghost btn-sm" disabled={busy === r.user_id} onClick={() => act(r, true, 'senior_officer')}>as Bureau officer</button>}
               <button className="btn-ghost btn-sm" disabled={busy === r.user_id} onClick={() => act(r, false)}>Decline</button></div>}</td>
           </tr>)}</tbody></table></div>}
     </div>

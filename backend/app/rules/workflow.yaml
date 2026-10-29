@@ -1,0 +1,51 @@
+# SealCheck workflow configuration (default, version 1).
+# Every value here is an EDITABLE DEFAULT for the prototype. Administrators change it on the
+# "Workflow config" page; each saved change becomes a new signed (HMAC-SHA256) version.
+# Nothing here quotes an APH clause; stage names, SLAs and ladders are illustrative defaults.
+version: 1
+regions:   # generic Region 1..N with an editable state mapping (not an official list of AICTE offices)
+  - {code: R1, name: "Region 1 (South)", states: [Tamil Nadu, Kerala, Puducherry, Andaman and Nicobar Islands, Lakshadweep]}
+  - {code: R2, name: "Region 2 (South-Central)", states: [Telangana, Andhra Pradesh]}
+  - {code: R3, name: "Region 3 (South-West)", states: [Karnataka, Goa]}
+  - {code: R4, name: "Region 4 (West)", states: [Maharashtra, Gujarat, Dadra and Nagar Haveli and Daman and Diu]}
+  - {code: R5, name: "Region 5 (Central)", states: [Madhya Pradesh, Chhattisgarh]}
+  - {code: R6, name: "Region 6 (North)", states: [Uttar Pradesh, Uttarakhand, Bihar, Jharkhand]}
+  - {code: R7, name: "Region 7 (North-West)", states: [Delhi, Haryana, Punjab, Himachal Pradesh, Rajasthan, Chandigarh, Jammu and Kashmir, Ladakh]}
+  - {code: R8, name: "Region 8 (East & North-East)", states: [West Bengal, Odisha, Assam, Sikkim, Meghalaya, Tripura, Mizoram, Manipur, Nagaland, Arunachal Pradesh]}
+stages:
+  scrutiny:  {label: "Scrutiny", sla_days: 15, actors: [officer, senior_officer]}
+  evc:       {label: "Expert Visit Committee (EVC)", sla_days: 30, actors: [officer, senior_officer], needs_evc_visit: true}
+  sac_shc:   {label: "SAC / SHC review", sla_days: 15, actors: [senior_officer]}
+  decision:  {label: "Competent authority decision", sla_days: 10, actors: [officer, senior_officer], terminal: true}
+routes:
+  - {id: only_scrutiny,    label: "Only Scrutiny",            stages: [scrutiny, decision]}
+  - {id: scrutiny_evc,     label: "Scrutiny + EVC",           stages: [scrutiny, evc, decision]}
+  - {id: scrutiny_evc_sac, label: "Scrutiny + EVC + SAC/SHC", stages: [scrutiny, evc, sac_shc, decision]}
+  - {id: evc_sac,          label: "EVC + SAC/SHC",            stages: [evc, sac_shc, decision]}
+  - {id: only_evc,         label: "Only EVC",                 stages: [evc, decision]}
+route_rules:   # first match wins; categories are ids from aicte_rules.yaml
+  - {categories: [new_institution], route: scrutiny_evc_sac}
+  - {categories: [increase_intake, change_site, second_shift, merger, new_course], route: scrutiny_evc}
+  - {categories: [foreign_collaboration], route: evc_sac}
+  - {categories: [restoration_intake], route: only_evc}
+  - {default: true, route: only_scrutiny}
+reminders:     # days BEFORE the due date at which a reminder is sent
+  submission_deadline: [30, 15, 7, 1]
+  stage_sla: [3, 1]
+  evc_visit: [7, 3, 1]
+  undertaking: [30, 15, 7, 1]
+  document_validity: [60, 30, 15, 7, 1]
+escalation:    # days AFTER the due date -> who is alerted (officer = Regional officer, senior_officer = Bureau officer)
+  submission_deadline: [{after_days: 0, to: officer}, {after_days: 7, to: senior_officer}]
+  stage_sla:           [{after_days: 0, to: officer}, {after_days: 5, to: senior_officer}, {after_days: 15, to: admin}]
+  evc_visit:           [{after_days: 0, to: officer}, {after_days: 7, to: senior_officer}]
+  undertaking:         [{after_days: 0, to: officer}, {after_days: 7, to: senior_officer}]
+  document_validity:   [{after_days: 0, to: officer}, {after_days: 15, to: senior_officer}]
+evc:
+  schedule_within_days: 21          # an EVC must be scheduled within N days of entering the EVC stage
+  complete_within_days: 30
+  new_institution_complete_within_days: 21
+validity_doc_types: [land_document, fire_noc, bank_fdr, building_completion, state_noc, university_affiliation]
+crosscheck:
+  fuzzy_threshold: 0.88             # difflib similarity below this is a mismatch
+channels: [inapp, email]            # email is only used when SMTP is configured (see notify.py)

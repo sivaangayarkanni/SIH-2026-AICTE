@@ -22,7 +22,7 @@ def env(monkeypatch_module):
     if not s.query(College).count():
         import seed_db; sys.argv = ["seed", "--force"]; seed_db.main()
     s.close()
-    monkeypatch_module.setattr(M, "AUTH_MODE", "oidc")
+    monkeypatch_module.setattr(M, "AUTH_MODE", "oidc"); monkeypatch_module.setattr(M, "PASSWORD_AUTH", False)
     monkeypatch_module.setattr(oidc, "ISSUER", issuer)
     oidc._disc.update(t=0, doc=None); oidc._jwks.clear()
     with TestClient(M.app) as c:

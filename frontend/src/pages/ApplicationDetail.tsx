@@ -4,6 +4,7 @@ import { Upload, FileText, Image as ImageIcon, Send, CheckCircle2, XCircle, Rota
 import clsx from 'clsx'
 import { api, download, fmtDate, fmtDay } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { WorkflowPanel } from '../components/WorkflowPanel'
 import { queueUpload, uploadNow, useOnline } from '../lib/offline'
 import { StatusChip, DecisionChip, RiskBadge, Ring, Skeleton, Modal, SEV } from '../components/ui'
 import { DocPanel } from '../components/DocPanel'
@@ -11,7 +12,7 @@ import { Avatar } from '../components/Avatar'
 import { useToast } from '../components/Toast'
 
 export default function ApplicationDetail() {
-  const { id } = useParams(); const { user } = useAuth(); const staff = user!.role !== 'college'
+  const { id } = useParams(); const { user } = useAuth(); const staff = ['officer', 'senior_officer', 'admin'].includes(user!.role)
   const [a, setA] = useState<any>(null); const [err, setErr] = useState(''); const [sel, setSel] = useState<number | null>(null); const [side, setSide] = useState(() => localStorage.getItem('sealcheck.side') !== 'closed')
   const load = useCallback(() => api(`/api/applications/${id}`).then((x) => { setA(x); setSel((s) => s ?? (x.documents.find((d: any) => d.status !== 'Verified') || x.documents[0])?.id ?? null) }).catch((e) => setErr(e.message)), [id])
   useEffect(() => { setA(null); setSel(null); load() }, [id])
@@ -38,11 +39,12 @@ export default function ApplicationDetail() {
         </div>
         <Timeline a={a} />
       </div>
+      {!draft && <WorkflowPanel appId={a.id} role={user!.role} onChanged={load} />}
       <div className={clsx('grid gap-4', side && 'xl:grid-cols-[330px_1fr]')}>
         {side ? <div className="space-y-4 xl:sticky xl:top-0 xl:max-h-[calc(100vh-110px)] xl:overflow-y-auto xl:pr-1 scroll-thin" data-tour="checklist">
           <button className="btn-ghost btn-sm hidden w-full xl:flex" onClick={() => { setSide(false); localStorage.setItem('sealcheck.side', 'closed') }}><PanelLeftClose className="h-3.5 w-3.5" />Collapse checklist for a wider evidence view</button>
-          <Checklist a={a} staff={staff} sel={sel} setSel={setSel} reload={load} />
-          {!staff && <CollegeActions a={a} reload={load} />}
+          <Checklist a={a} staff={staff || user!.role === 'evc_member'} sel={sel} setSel={setSel} reload={load} />
+          {user!.role === 'college' && <CollegeActions a={a} reload={load} />}
           {staff && <DecisionPanel a={a} reload={load} />}
           {a.guidance && <Guidance a={a} />}
         </div> : <button className="btn-ghost btn-sm justify-self-start" onClick={() => { setSide(true); localStorage.setItem('sealcheck.side', 'open') }}><PanelLeftOpen className="h-3.5 w-3.5" />Show checklist{staff ? ' & decision panel' : ' & actions'}</button>}

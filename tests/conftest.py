@@ -6,6 +6,7 @@ os.environ["SEALCHECK_DATA_DIR"] = TMP
 os.environ["SEALCHECK_SAMPLES_DIR"] = TMP + "/samples"
 os.environ.setdefault("RATE_LIMIT", "off")  # test_ops exercises the limiter directly
 os.environ.setdefault("LOG_FORMAT", "plain")
+os.environ.setdefault("SEALCHECK_BCRYPT_ROUNDS", "4")  # fast hashing in tests only (production: 12)
 if os.getenv("TEST_DATABASE_URL"):  # e.g. postgresql+psycopg://sealcheck@127.0.0.1:5544/sealcheck_test
     os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
 else:

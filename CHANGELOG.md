@@ -1,6 +1,25 @@
 # Changelog
 
-All commits are local. Nothing has been pushed to any remote.
+## Approval workflow + username/password accounts
+
+### Workflow
+- Configurable routes and stages (signed, versioned config) with auto-advance and return/revert with a reason.
+- Deadline reminders, and escalation to officers after a missed deadline. A daily Vercel cron (`/api/cron/evaluate`, protected by `CRON_SECRET`) drives them.
+- New pages: the step-by-step application wizard (progress bar, drafts, per-step validation), the cross-document core-field check, the calendar (month/agenda/ICS), the pendency dashboard (ageing, bottlenecks, alerts), and EVC queue/scheduling/completion with a summarised EVC form (screen + PDF).
+- Undertakings with evidence, verification and escalation; document validity tracking and renewal; CSV/PDF reports.
+- New `evc_member` role. Region assignment for officers. Integration-hook interface.
+- A safeguard notice in the UI and README.
+- Docs: `docs/WORKFLOW.md`.
+
+### Accounts
+- Google sign-in is replaced by **username + password** signup and sign-in, with roles. Production uses `AUTH_MODE=password`; Google and OIDC remain optional and are off by default.
+- Passwords: bcrypt (prehashed with SHA-256), a policy (10+ characters, 3 character classes, a common-password list, optional HIBP k-anonymity check) and a strength meter.
+- Sign-in: per-IP rate limiting, progressive per-account lockout, and generic errors with equal timing for unknown accounts.
+- Sessions: token versioning powers password change, sign-out-everywhere and role-change invalidation. Admin reset issues a one-time temporary password and forces a change.
+- First admin: from env bootstrap, or `/setup` while there are zero admins.
+- Docs: `docs/ACCOUNTS_AND_ROLES.md` replaces `docs/GOOGLE_LOGIN_SETUP.md`.
+- Migration `0004` adds the workflow tables and `user_credentials`.
+
 
 ## Acceptance pass, AICTE Portal theme, and the rename to SealCheck
 

@@ -14,7 +14,7 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -200,8 +200,8 @@ class OnboardingIn(BaseModel):
     @field_validator("requested_role")
     @classmethod
     def _role(cls, v):
-        if v not in ("college", "officer"):
-            raise ValueError("Choose 'college representative' or 'AICTE officer (needs approval)'.")
+        if v not in ("college", "officer", "evc_member"):
+            raise ValueError("Choose 'college representative', 'AICTE officer (needs approval)' or 'EVC member (needs approval)'.")
         return v
 
     @field_validator("aicte_id")
@@ -294,15 +294,27 @@ def decide(s, admin: User, user_id: int, approve: bool, body: DecisionIn) -> dic
     if u.id == admin.id:
         raise HTTPException(403, "You cannot approve your own access.")
     if approve:
-        role = body.role or ("college" if prof.requested_role == "college" else "officer")
-        if role not in ("college", "officer", "senior_officer", "admin"):
+        role = body.role or (prof.requested_role if prof.requested_role in ("college", "evc_member", "officer", "senior_officer") else "officer")
+        if role not in ("college", "officer", "senior_officer", "evc_member", "admin"):
             raise HTTPException(422, "Unknown role")
         if role == "college":
             col = s.query(College).filter(College.code == prof.aicte_id).first()
             if col is None:
                 col = College(code=prof.aicte_id, name=prof.institution_name, state=prof.state); s.add(col); s.flush()
             u.college_id = col.id
+        prev = u.role
         u.role, prof.status = role, "approved"
+        from .accounts import UserCredential
+        c = s.get(UserCredential, u.id)
+        if role == "officer" and c and c.requested_region:
+            from .workflow import UserRegion
+            r = s.get(UserRegion, u.id)
+            if r:
+                r.region_code = c.requested_region
+            else:
+                s.add(UserRegion(user_id=u.id, region_code=c.requested_region))
+        if c and prev != role:
+            c.token_version += 1   # role change: earlier sessions must sign in again
     else:
         prof.status = "rejected"
     prof.decided_by, prof.decided_at, prof.decision_note = f"{admin.name} <{admin.email}>", now(), body.note or None

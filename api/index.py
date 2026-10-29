@@ -2,7 +2,7 @@
 
 ENV=production (set in the Vercel project): shared Neon Postgres (DATABASE_URL from the Neon integration),
 document blobs stored insert-only in Postgres (STORAGE_BACKEND=db), keys derived from SEALCHECK_MASTER_KEY,
-Google sign-in (AUTH_MODE=google), jobs run inline in the request, no demo data. The schema is created
+username + password accounts with admin-approved roles (AUTH_MODE=password), jobs run inline in the request, no demo data. The schema is created
 idempotently under a Postgres advisory lock; nothing is reseeded per instance.
 
 ENV=development (local `vercel dev` only): synthetic demo data is generated and seeded into /tmp."""
@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.setdefault("SEALCHECK_DATA_DIR", "/tmp/sealcheck"))
 DATA.mkdir(parents=True, exist_ok=True)
 for k, v in {
-    "ENV": "production", "AUTH_MODE": "google", "QUEUE_BACKEND": "inline", "SANDBOX_BACKEND": "process",
+    "ENV": "production", "AUTH_MODE": "password", "QUEUE_BACKEND": "inline", "SANDBOX_BACKEND": "process",
     "SEALCHECK_ACCEPT_PROCESS_SANDBOX": "1", "STORAGE_BACKEND": "db", "VISION_BACKEND": "classic", "RATE_LIMIT": "on",
     "SEALCHECK_FRONTEND_DIST": str(ROOT / "frontend" / "dist-not-served-by-function"),
 }.items():
@@ -48,4 +48,6 @@ if os.environ["ENV"] == "development":
     _dev_seed()
 from app.db import init_db  # noqa: E402
 init_db()  # idempotent; advisory-locked on Postgres so concurrent cold starts are safe
+from app.accounts import bootstrap_from_env  # noqa: E402
+bootstrap_from_env()  # first admin from SEALCHECK_BOOTSTRAP_ADMIN_USERNAME/_PASSWORD (never overwrites)
 from app.main import app  # noqa: E402,F401

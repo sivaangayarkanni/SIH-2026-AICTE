@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowRight, Fingerprint, Lock, ScanSearch, ShieldCheck, Network, Scale, Loader2, Palette } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { api } from '../lib/api'
@@ -21,6 +21,8 @@ export default function Login() {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [busy, setBusy] = useState<string | null>(null); const [err, setErr] = useState('')
   const [reason] = useState(() => { const r = sessionStorage.getItem('sealcheck.logout_reason'); sessionStorage.removeItem('sealcheck.logout_reason'); return r || new URLSearchParams(window.location.search).get('error') })
   useEffect(() => { if (!cfg || !cfg.demo_accounts) return; api('/api/auth/demo-accounts').then((r) => { setAccounts(r.accounts); setPw(r.password) }).catch(() => {}) }, [cfg])
+  const [setupNeeded, setSetupNeeded] = useState(false)
+  useEffect(() => { if (cfg?.signup) api('/api/auth/setup').then((r) => setSetupNeeded(!!r.needed)).catch(() => {}) }, [cfg])
   useEffect(() => { if (user) nav(loc.state?.from || '/', { replace: true }) }, [user])
   const go = async (e: string, p: string) => {
     setBusy(e); setErr('')
@@ -53,16 +55,18 @@ export default function Login() {
             {err && <div role="alert" className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">{err}</div>}
             <p className="mt-3 text-xs text-muted">OpenID Connect · Authorization Code + PKCE · {cfg.oidc?.issuer}</p>
           </> : <>
-          <p className="mt-1 text-sm text-muted">Sign in with email, or pick a demo persona below for one-click access.</p>
+          <p className="mt-1 text-sm text-muted">Sign in with your username (or email) and password.{cfg?.demo_accounts ? ' Or pick a demo persona below.' : ''}</p>
+          {setupNeeded && <div role="status" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="setup-needed">No administrator exists yet. <Link className="font-semibold underline" to="/setup">Run first-time setup</Link>.</div>}
           <form className="mt-5 space-y-3" onSubmit={(e) => { e.preventDefault(); go(email, password) }}>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div><label className="label" htmlFor="em">Email</label><input id="em" className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="officer@sealcheck.demo" autoComplete="username" /></div>
-              <div><label className="label" htmlFor="pw">Password</label><input id="pw" className="input" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Demo@2026" autoComplete="current-password" /></div>
+              <div><label className="label" htmlFor="em">Username or email</label><input id="em" data-testid="signin-username" className="input" type="text" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={cfg?.demo_accounts ? 'officer' : 'your.username'} autoComplete="username" autoCapitalize="none" spellCheck={false} /></div>
+              <div><label className="label" htmlFor="pw">Password</label><input id="pw" data-testid="signin-password" className="input" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></div>
             </div>
             {err && <div role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">{err}</div>}
             <button className="btn-primary w-full py-2.5" disabled={!!busy} data-testid="signin-submit">{busy === email ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Sign in securely</button>
           </form>
-          {(cfg?.demo_accounts ?? true) && <>
+          {cfg?.signup && <p className="mt-3 text-sm">New to SealCheck? <Link to="/signup" className="font-semibold text-primary underline" data-testid="goto-signup">Create an account</Link> · College representatives get access straight away; officer and EVC roles are approved by an administrator.</p>}
+          {cfg?.demo_accounts && <>
           <div className="my-5 flex items-center gap-3 text-xs text-muted"><span className="h-px flex-1 bg-line" />demo personas (development only)<span className="h-px flex-1 bg-line" /></div>
           <div className="grid gap-2.5 sm:grid-cols-2">
             {accounts.length === 0 && Array.from({ length: 8 }).map((_, i) => <div key={i} className="skeleton h-[68px]" />)}

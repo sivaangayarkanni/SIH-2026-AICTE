@@ -3,15 +3,29 @@ import base64, hashlib, hmac, json, os, time, uuid
 import jwt
 from .config import secret, JWT_SECRET, JWT_TTL_MIN, JOB_TOKEN_TTL_S
 
-# ---------- passwords (PBKDF2-SHA256, 200k iterations) ----------
+# ---------- passwords (bcrypt, cost 12; legacy PBKDF2-SHA256 hashes still verify and are upgraded on login) ----------
+BCRYPT_ROUNDS = int(os.getenv("SEALCHECK_BCRYPT_ROUNDS", "12"))
+
+
+def _prehash(pw: str) -> bytes:
+    # bcrypt reads at most 72 bytes and stops at NUL; a base64 SHA-256 prehash keeps every character significant.
+    return base64.b64encode(hashlib.sha256(pw.encode()).digest())
+
+
 def hash_password(pw: str) -> str:
-    salt = os.urandom(16)
-    dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt, 200_000)
-    return f"pbkdf2_sha256$200000${salt.hex()}${dk.hex()}"
+    import bcrypt
+    return "bcrypt_sha256$" + bcrypt.hashpw(_prehash(pw), bcrypt.gensalt(BCRYPT_ROUNDS)).decode()
+
+
+_DUMMY: list[str] = []
 
 
 def verify_password(pw: str, stored: str) -> bool:
+    """Constant-time comparison for both formats. Unknown/disabled hashes ('!oidc') return False."""
     try:
+        if stored.startswith("bcrypt_sha256$"):
+            import bcrypt
+            return bcrypt.checkpw(_prehash(pw), stored.split("$", 1)[1].encode())
         _, it, salt, h = stored.split("$")
         dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), bytes.fromhex(salt), int(it))
         return hmac.compare_digest(dk.hex(), h)
@@ -19,13 +33,29 @@ def verify_password(pw: str, stored: str) -> bool:
         return False
 
 
+def burn_password_check(pw: str) -> None:
+    """Spend the same time as a real check when the account does not exist (no user-enumeration by timing)."""
+    if not _DUMMY:
+        _DUMMY.append(hash_password("not-a-real-password"))
+    verify_password(pw, _DUMMY[0])
+
+
+def needs_rehash(stored: str) -> bool:
+    if not stored.startswith("bcrypt_sha256$"):
+        return True
+    try:
+        return int(stored.split("$")[3]) < BCRYPT_ROUNDS
+    except Exception:
+        return True
+
+
 # ---------- JWT ----------
 def _jwt_key() -> bytes:
     return JWT_SECRET.encode() if JWT_SECRET else secret("jwt.key")
 
 
-def issue_jwt(user) -> str:
-    payload = {"sub": str(user.id), "role": user.role, "cid": user.college_id,
+def issue_jwt(user, tv: int = 0) -> str:
+    payload = {"sub": str(user.id), "role": user.role, "cid": user.college_id, "tv": tv,
                "iat": int(time.time()), "exp": int(time.time()) + JWT_TTL_MIN * 60}
     return jwt.encode(payload, _jwt_key(), algorithm="HS256")
 

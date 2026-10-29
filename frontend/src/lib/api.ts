@@ -1,4 +1,4 @@
-export class ApiError extends Error { status: number; constructor(s: number, m: string) { super(m); this.status = s } }
+export class ApiError extends Error { status: number; fields: Record<string, string>; constructor(s: number, m: string, f: Record<string, string> = {}) { super(m); this.status = s; this.fields = f } }
 
 export const getToken = () => localStorage.getItem('sealcheck.token') || ''
 
@@ -10,13 +10,18 @@ export async function api<T = any>(path: string, opts: RequestInit & { json?: an
   if (opts.json !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(opts.json) }
   let r: Response
   try { r = await fetch(path, { ...opts, headers, body }) } catch { throw new ApiError(0, 'You appear to be offline. The request could not reach the server.') }
-  if (r.status === 401 && !path.includes('/auth/login')) {
+  if (r.status === 401 && !/\/auth\/(login|signup|setup)/.test(path)) {
     localStorage.removeItem('sealcheck.token'); window.dispatchEvent(new Event('sealcheck:logout'))
   }
   if (!r.ok) {
-    let msg = r.statusText
-    try { const j = await r.json(); msg = typeof j.detail === 'string' ? j.detail : (j.detail?.[0]?.msg ?? JSON.stringify(j.detail)) } catch { /* not json */ }
-    throw new ApiError(r.status, msg)
+    let msg = r.statusText; let fields: Record<string, string> = {}
+    try {
+      const j = await r.json()
+      if (typeof j.detail === 'string') msg = j.detail
+      else if (j.detail?.message) { msg = j.detail.message; fields = j.detail.fields || {} }
+      else msg = j.detail?.[0]?.msg ?? JSON.stringify(j.detail)
+    } catch { /* not json */ }
+    throw new ApiError(r.status, msg, fields)
   }
   const ct = r.headers.get('content-type') || ''
   return (ct.includes('json') ? r.json() : (r.blob() as any)) as Promise<T>

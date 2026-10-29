@@ -23,3 +23,4 @@ httpx==0.28.1
 prometheus_client==0.26.0
 psycopg[binary]==3.3.6
 pgvector==0.5.1
+bcrypt==4.3.0  # password hashing (cost 12)

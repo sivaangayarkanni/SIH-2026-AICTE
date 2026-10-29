@@ -25,7 +25,7 @@ def env():
     from app import google_auth
     from app.db import init_db
     init_db()
-    mp.setattr(M, "AUTH_MODE", "google"); mp.setattr(M, "DEMO_LOGIN", False)
+    mp.setattr(M, "AUTH_MODE", "google"); mp.setattr(M, "DEMO_LOGIN", False); mp.setattr(M, "PASSWORD_AUTH", False)
     mp.setenv("GOOGLE_CLIENT_ID", "test-client.apps.googleusercontent.com")
     mp.setenv("GOOGLE_CLIENT_SECRET", "test-secret"); mp.setenv("GOOGLE_ISSUER", issuer)
     mp.setenv("SEALCHECK_BOOTSTRAP_ADMIN_EMAIL", "boss@gmail.test")

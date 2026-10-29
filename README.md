@@ -102,6 +102,27 @@ Full script with talking points: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 5. **2:15** Open **Security center**. Watch a 60-second job token expire, run the KMS demo, and verify the audit chain.
 6. **2:40** Sign in as **principal.gvce**. Use the readiness pre-check, the rejection helper and the offline queue (DevTools → offline → upload), and switch themes.
 
+## Approval workflow (deadlines, escalation, EVC, compliance)
+
+> **Safeguard:** Automated alerts, recommendations and workflow actions support the approval process. They do not replace statutory scrutiny, verification, inspections or decisions taken by the competent authority.
+
+Full detail is in [docs/WORKFLOW.md](docs/WORKFLOW.md). The architecture image is [docs/sealcheck_architecture_1920x1080.png](docs/sealcheck_architecture_1920x1080.png).
+
+| Area | What you get | Where |
+|---|---|---|
+| Application wizard | Google-Form-like steps, a progress bar, drafts you can save and resume, per-step validation | `/apply` |
+| Cross-document check | Core fields compared across documents. Each mismatch is returned to the institution as "to be corrected / re-uploaded" and flagged to officers | Wizard review, application page |
+| Routes | Configurable stages and routes, auto-advance, return/revert with a reason | `rules/workflow.yaml`, `/workflow-config` |
+| Reminders and escalation | Reminders before each deadline. After a missed deadline, escalation to the Regional officer, then the Bureau officer, then the admin | Daily cron, in-app and email (SMTP) |
+| Calendar | Month and agenda views, ICS subscription | `/calendar` |
+| Pendency | Ageing, bottlenecks, overdue, alerts, by region/stage/officer/institution | `/pendency` |
+| EVC | Queue, scheduling, member observations, completion, a summarised EVC form (one page + detail, on screen and PDF) | `/evc` |
+| Undertakings and validity | Evidence, verification and escalation. Validity expiry tracking and renewal | `/compliance` |
+| Reports | CSV and PDF exports; every action is in the hash-chained audit trail | `/reports` |
+| Integration hooks | `PortalAdapter` interface only. Not connected to any real AICTE system | `backend/app/integrations.py` |
+
+Stage names, SLA days and region names are **editable placeholders**, not quotations from the AICTE Approval Process Handbook.
+
 ## Production deployment on Vercel (https://sealcheck-nu.vercel.app)
 
 `vercel.json`, `api/index.py`, `requirements.txt` and `.python-version` deploy the app. The Vite build is served from the CDN,
@@ -112,19 +133,20 @@ and the database starts empty apart from the signed rule bundle.
 |---|---|
 | Database | free **Neon Postgres** (Vercel integration, `DATABASE_URL`). Migrations and seeding run under an advisory lock |
 | File storage | `STORAGE_BACKEND=db`: original and sanitised files go in Postgres `bytea`, insert-only and sha256-verified on every read, so every instance sees the same files |
-| Login | `AUTH_MODE=google`: Sign in with Google (Authorization Code + PKCE, server-verified ID token, verified email required), then a profile/onboarding form. Officer and admin access is approved by an administrator and can never be self-assigned. Setup: [docs/GOOGLE_LOGIN_SETUP.md](docs/GOOGLE_LOGIN_SETUP.md) |
+| Login | `AUTH_MODE=password`: **username + password** signup and sign-in, with roles (College representative, EVC member, Regional officer, Bureau officer). Only a first college representative gets access straight away. Every other role waits for an administrator. Passwords are hashed with bcrypt; there is lockout, token-version logout-everywhere and admin reset. The first admin comes from `SEALCHECK_BOOTSTRAP_ADMIN_USERNAME`/`_PASSWORD`. See [docs/ACCOUNTS_AND_ROLES.md](docs/ACCOUNTS_AND_ROLES.md). Google/OIDC are optional and off |
+| Cron | `vercel.json` `crons` → `GET /api/cron/evaluate` daily 02:30 UTC (08:00 IST), with `Authorization: Bearer $CRON_SECRET`: deadline reminders and escalation |
 | Keys | `SEALCHECK_MASTER_KEY` → HKDF-derived sub-keys (identical on every instance); `SEALCHECK_JWT_SECRET` |
 | Jobs / sandbox | `QUEUE_BACKEND=inline` (each upload is analysed within its request); `process` sandbox (rlimits; Vercel has no bubblewrap), explicitly accepted with `SEALCHECK_ACCEPT_PROCESS_SANDBOX=1` |
 | Vision | `classic` (pHash + ORB) in the function. Deep models run in the separate [vision_service/](vision_service/) (Docker / Hugging Face Space); point `VISION_BACKEND=remote`, `VISION_REMOTE_URL` and `VISION_REMOTE_TOKEN` at it |
 
-Until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are added, the login page shows "Google sign-in is not configured".
 Operator tasks, such as creating an account by hand, issuing a short-lived token or deleting a user, use `scripts/admin.py`
 (every action is audit-logged; WORM blobs and audit entries are never deleted).
 
 ```bash
-vercel env add GOOGLE_CLIENT_ID production
-vercel env add GOOGLE_CLIENT_SECRET production --sensitive
-vercel env add SEALCHECK_BOOTSTRAP_ADMIN_EMAIL production   # your Google address -> first administrator
+vercel env add AUTH_MODE production                          # password
+vercel env add SEALCHECK_BOOTSTRAP_ADMIN_USERNAME production
+vercel env add SEALCHECK_BOOTSTRAP_ADMIN_PASSWORD production --sensitive   # strong, generated; or use /setup while there are 0 admins
+vercel env add CRON_SECRET production --sensitive
 vercel deploy --prod
 ```
 

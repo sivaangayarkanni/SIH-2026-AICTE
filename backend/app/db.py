@@ -99,7 +99,7 @@ class User(Base):
     password_hash = Column(String(300), nullable=False)
     avatar_seed = Column(String(60))
     college = relationship("College")
-    __table_args__ = (CheckConstraint("role in ('college','officer','senior_officer','admin','pending')", name="ck_users_role"),)
+    __table_args__ = (CheckConstraint("role in ('college','officer','senior_officer','evc_member','admin','pending')", name="ck_users_role"),)
 
 
 class Application(Base):
@@ -361,6 +361,7 @@ PG_DDL = [
 def init_db():
     """Idempotent schema setup. On PostgreSQL it runs under an advisory lock so concurrent cold starts
     (several serverless instances) cannot race; `alembic upgrade head` produces the same DDL."""
+    from . import workflow, accounts  # noqa: F401  (registers the workflow + credential tables on Base.metadata)
     if not IS_PG:
         Base.metadata.create_all(engine)
         return
@@ -372,7 +373,7 @@ def init_db():
             c.execute(text(stmt))
         c.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_role"))
         c.execute(text("ALTER TABLE users ADD CONSTRAINT ck_users_role CHECK (role in "
-                       "('college','officer','senior_officer','admin','pending'))"))
+                       "('college','officer','senior_officer','evc_member','admin','pending'))"))
 
 
 def reset_db():

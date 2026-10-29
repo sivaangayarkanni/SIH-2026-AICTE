@@ -14,10 +14,10 @@ from . import audit, service, reports, qa
 from .config import AUTH_MODE, SESSION_IDLE_MIN, IS_PROD, ENV
 from . import sandbox
 from . import oidc
-from . import storage, google_auth
+from . import storage, google_auth, accounts
 from .config import FRONTEND_DIST, SAMPLES_DIR, TEMPLATES_DIR, BACKEND_DIR, JOB_TOKEN_TTL_S, LLM_API_KEY, DATA_DIR
 from .db import (engine, SessionLocal, init_db, User, College, Application, Document, DocumentVersion, Job, Evidence, PiiVault, AuditLog, Override, Notification, UserProfile, now)
-from .security import (verify_password, issue_jwt, decode_jwt, issue_job_token, verify_job_token, TokenError, kms,
+from .security import (issue_jwt, decode_jwt, issue_job_token, verify_job_token, TokenError, kms,
                        job_token_key)
 from .events import notify_event
 from .rules_bundle import load_rules, verify_bundle, RuleBundleError
@@ -31,6 +31,7 @@ async def lifespan(_app):
     import asyncio
     _app.state.draining = False
     init_db()
+    accounts.bootstrap_from_env()
     if sandbox.active_backend() == "process":
         logging.getLogger("sealcheck").warning("SANDBOX: bubblewrap unavailable -> 'process' fallback (rlimits + Python socket guard only). "
                                            "Development only; ENV=production refuses this mode.")
@@ -49,7 +50,21 @@ async def lifespan(_app):
                         integrity_check(s2)
                 await asyncio.to_thread(run)
         task = asyncio.create_task(loop())
+    wf_task = None
+    wf_interval = int(os.environ.get("WF_SCHEDULER_S", "0") or 0)
+    if wf_interval > 0:   # dev scheduler loop (production uses Vercel Cron -> /api/cron/evaluate)
+        from . import workflow
+        async def wf_loop():
+            while True:
+                await asyncio.sleep(wf_interval)
+                try:
+                    await asyncio.to_thread(workflow.evaluate, None, "dev-loop")
+                except Exception:
+                    logging.getLogger("sealcheck").exception("workflow evaluation failed")
+        wf_task = asyncio.create_task(wf_loop())
     yield
+    if wf_task:
+        wf_task.cancel()
     _app.state.draining = True  # graceful shutdown: readiness goes 503, then in-flight jobs finish
     if task:
         task.cancel()
@@ -67,8 +82,9 @@ app.add_middleware(CORSMiddleware, allow_origins=[o for o in os.environ.get("COR
                    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
                    allow_credentials=True, expose_headers=["X-Request-ID"])
 
-ROLES = ["college", "officer", "senior_officer", "admin"]
-ROLE_LABEL = {"pending": "Awaiting approval", "college": "College", "officer": "Scrutiny Officer", "senior_officer": "Senior Officer", "admin": "Administrator"}
+ROLES = ["college", "officer", "senior_officer", "evc_member", "admin"]
+ROLE_LABEL = {"pending": "Awaiting approval", "college": "College", "officer": "Scrutiny / Regional Officer", "senior_officer": "Senior / Bureau Officer",
+              "evc_member": "EVC Member", "admin": "Administrator"}
 
 
 @app.middleware("http")
@@ -114,12 +130,18 @@ def current_user(request: Request, s=Depends(db)) -> User:
     u = s.get(User, int(claims["sub"]))
     if not u:
         raise HTTPException(401, "Unknown user")
+    c = s.get(accounts.UserCredential, u.id)
+    if c is not None and int(claims.get("tv", 0)) != c.token_version:
+        raise HTTPException(401, "You were signed out (password or role changed, or 'sign out everywhere'). Please sign in again.")
+    if c is not None and c.must_change and request.url.path not in MUST_CHANGE_OK:
+        raise HTTPException(403, "You must change your temporary password before continuing.")
     if u.role == "pending" and request.url.path not in PENDING_OK:
         raise HTTPException(403, "Your account is waiting for onboarding or administrator approval.")
     return u
 
 
-PENDING_OK = {"/api/auth/me", "/api/auth/logout", "/api/auth/profile", "/api/auth/onboarding", "/api/auth/onboarding/options"}
+MUST_CHANGE_OK = {"/api/auth/me", "/api/auth/logout", "/api/auth/password", "/api/auth/logout-all"}
+PENDING_OK = {"/api/auth/password", "/api/auth/logout-all", "/api/auth/me", "/api/auth/logout", "/api/auth/profile", "/api/auth/onboarding", "/api/auth/onboarding/options"}
 
 
 def _oidc_user(s, claims) -> User:
@@ -166,6 +188,10 @@ def scoped_app(s, app_id: int, u: User) -> Application:
     if u.role == "college" and a.college_id != u.college_id:   # row-level security (ABAC)
         audit.log("access.denied", actor(u), u.role, f"application:{app_id}", {"reason": "row-level scope"})
         raise HTTPException(404, "Application not found")
+    if u.role == "evc_member":   # EVC members: read-only, only applications whose visit they are assigned to
+        from .workflow import EvcVisit
+        if not any(u.id in (v.members_json or []) for v in s.query(EvcVisit).filter(EvcVisit.application_id == a.id).all()):
+            raise HTTPException(404, "Application not found")
     return a
 
 
@@ -178,30 +204,40 @@ def scoped_doc(s, doc_id: int, u: User) -> Document:
 
 
 _attempts = defaultdict(deque)
+_signups = defaultdict(deque)
 
 
 class LoginIn(BaseModel):
-    email: str
-    password: str
+    username: str = Field("", max_length=200)   # username or email
+    email: str = Field("", max_length=200)      # kept for older clients
+    password: str = Field(max_length=256)
 
 
 def user_out(u: User):
     return {"id": u.id, "email": u.email, "name": u.name, "title": u.title, "role": u.role, "role_label": ROLE_LABEL[u.role],
             "college_id": u.college_id, "college": u.college.name if u.college else None, "avatar_seed": u.avatar_seed,
-            "access_status": (u.profile.status if getattr(u, "profile", None) else None)}
+            "access_status": (u.profile.status if getattr(u, "profile", None) else None)} | _cred_out(u)
+
+
+def _cred_out(u: User) -> dict:
+    from sqlalchemy.orm import object_session
+    s = object_session(u)
+    c = s.get(accounts.UserCredential, u.id) if s is not None else None
+    return {"username": c.username if c else None, "must_change_password": bool(c and c.must_change)}
 
 
 @app.get("/api/auth/config")
 def auth_config():
     return {"mode": AUTH_MODE, "idle_timeout_min": SESSION_IDLE_MIN,
             "oidc": oidc.public_config() if AUTH_MODE == "oidc" else None, "demo_accounts": DEMO_LOGIN,
-            "password_login": AUTH_MODE == "local", "env": ENV,
+            "password_login": AUTH_MODE in ("local", "password"), "signup": AUTH_MODE in ("local", "password"), "env": ENV,
             "google": {"enabled": google_auth.configured(),
                        "notice": None if google_auth.configured() else "Google sign-in is not configured yet (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET missing)."},
             "demo_notice": (os.environ.get("SEALCHECK_DEMO_NOTICE") or None) if not IS_PROD else None}
 
 
 DEMO_LOGIN = ENV == "development" and AUTH_MODE == "local"
+PASSWORD_AUTH = AUTH_MODE in ("local", "password")
 app.include_router(google_auth.router)
 
 
@@ -209,7 +245,8 @@ app.include_router(google_auth.router)
 def onboarding_options(u: User = Depends(current_user)):
     return {"states": google_auth.INDIAN_STATES, "email": u.email, "name": u.name,
             "roles": [{"value": "college", "label": "College / institution representative"},
-                      {"value": "officer", "label": "AICTE officer (requires administrator approval)"}]}
+                      {"value": "officer", "label": "AICTE officer (requires administrator approval)"},
+                      {"value": "evc_member", "label": "Expert Visit Committee member (requires administrator approval)"}]}
 
 
 @app.get("/api/auth/profile")
@@ -227,7 +264,7 @@ def onboarding(body: google_auth.OnboardingIn, u: User = Depends(current_user), 
 
 @app.post("/api/auth/login")
 def login(body: LoginIn, request: Request, s=Depends(db)):
-    if AUTH_MODE != "local":
+    if not PASSWORD_AUTH:
         raise HTTPException(403, "Password sign-in is disabled; use single sign-on.")
     ip = request.client.host if request.client else "-"
     q = _attempts[ip]
@@ -235,13 +272,106 @@ def login(body: LoginIn, request: Request, s=Depends(db)):
         q.popleft()
     if len(q) >= 10:
         raise HTTPException(429, "Too many failed sign-in attempts. Wait a minute and try again.")
-    u = s.query(User).filter(User.email == body.email.lower().strip()).first()
-    if not u or not verify_password(body.password, u.password_hash):
+    try:
+        u, c = accounts.password_login(s, body.username or body.email, body.password, ip)
+    except HTTPException:
         q.append(time.time())
-        audit.log("auth.failed", body.email, "-", "auth", ip=ip)
-        raise HTTPException(401, "Email or password is incorrect.")
-    audit.log("auth.login", actor(u), u.role, f"user:{u.id}", ip=ip)
-    return {"token": issue_jwt(u), "user": user_out(u)}
+        raise
+    audit.log("auth.login", actor(u), u.role, f"user:{u.id}", {"method": "password", "username": c.username}, ip=ip)
+    return {"token": issue_jwt(u, c.token_version), "user": user_out(u), "must_change_password": c.must_change}
+
+
+@app.post("/api/auth/signup")
+def signup(body: accounts.SignupIn, request: Request):
+    if not PASSWORD_AUTH:
+        raise HTTPException(403, "Sign-up is handled by single sign-on on this server.")
+    ip = request.client.host if request.client else "-"
+    q = _signups[ip]
+    while q and q[0] < time.time() - 3600:
+        q.popleft()
+    if len(q) >= 10:
+        raise HTTPException(429, "Too many sign-ups from this network. Try again later.")
+    q.append(time.time())
+    return accounts.signup(body, ip)
+
+
+@app.get("/api/auth/signup/options")
+def signup_options(s=Depends(db)):
+    from .workflow import active_config
+    return {"roles": [{"value": k, "label": v, "needs_approval": k != "college"} for k, v in accounts.SIGNUP_ROLES.items()],
+            "states": google_auth.INDIAN_STATES, "regions": [{"code": r["code"], "name": r["name"]} for r in active_config(s)["regions"]],
+            "policy": {"min_length": 10, "classes": 3, "breach_check": os.environ.get("PASSWORD_BREACH_CHECK", "off").lower() == "hibp"}}
+
+
+class PwCheckIn(BaseModel):
+    password: str = Field(max_length=256)
+    username: str = Field("", max_length=32)
+    email: str = Field("", max_length=200)
+
+
+@app.post("/api/auth/password/check")
+def password_check(body: PwCheckIn):
+    return {"problems": accounts.password_problems(body.password, body.username, body.email)}
+
+
+@app.post("/api/auth/password")
+def password_change(body: accounts.PasswordChangeIn, u: User = Depends(current_user), s=Depends(db)):
+    return {"token": accounts.change_password(s, u, body), "user": user_out(u)}
+
+
+@app.post("/api/auth/logout-all")
+def logout_all(u: User = Depends(current_user), s=Depends(db)):
+    accounts.sign_out_everywhere(s, u)
+    return {"ok": True}
+
+
+@app.get("/api/auth/setup")
+def setup_status(s=Depends(db)):
+    return {"needed": PASSWORD_AUTH and accounts.admin_count(s) == 0}
+
+
+@app.post("/api/auth/setup")
+def setup(body: accounts.SetupIn, request: Request):
+    if not PASSWORD_AUTH:
+        raise HTTPException(403, "Not available")
+    return accounts.first_run_setup(body, request.client.host if request.client else "-")
+
+
+@app.post("/api/admin/users/{user_id}/reset-password")
+def admin_reset_password(user_id: int, u: User = Depends(require("admin")), s=Depends(db)):
+    return accounts.admin_reset(s, u, user_id)
+
+
+class RoleIn(BaseModel):
+    role: str
+    note: str = Field("", max_length=300)
+
+
+@app.post("/api/admin/users/{user_id}/role")
+def admin_set_role(user_id: int, body: RoleIn, u: User = Depends(require("admin")), s=Depends(db)):
+    t = s.get(User, user_id)
+    if not t:
+        raise HTTPException(404, "User not found")
+    if t.id == u.id:
+        raise HTTPException(403, "You cannot change your own role.")
+    if body.role not in ("officer", "senior_officer", "evc_member", "admin", "pending") and not (body.role == "college" and t.college_id):
+        raise HTTPException(422, "Unknown role (college needs a linked institution; approve it from Access requests).")
+    prev = t.role
+    t.role = body.role
+    c = accounts.cred_for(s, t); c.token_version += 1
+    s.commit()
+    audit.log("access.role_changed", actor(u), u.role, f"user:{t.id}", {"from": prev, "to": body.role, "note": body.note})
+    return user_out(t)
+
+
+@app.get("/api/admin/users")
+def admin_users(u: User = Depends(require("admin")), s=Depends(db)):
+    creds = {c.user_id: c for c in s.query(accounts.UserCredential).all()}
+    t = now()
+    return [user_out(x) | {"username": creds[x.id].username if x.id in creds else None,
+                           "locked": bool(x.id in creds and creds[x.id].locked_until and creds[x.id].locked_until > t),
+                           "last_login_at": creds[x.id].last_login_at.isoformat() if x.id in creds and creds[x.id].last_login_at else None}
+            for x in s.query(User).order_by(User.id).all()]
 
 
 @app.get("/api/auth/me")
@@ -398,6 +528,10 @@ def list_apps(u: User = Depends(current_user), s=Depends(db)):
     q = s.query(Application)
     if u.role == "college":
         q = q.filter(Application.college_id == u.college_id)
+    if u.role == "evc_member":
+        from .workflow import EvcVisit
+        ids = [v.application_id for v in s.query(EvcVisit).all() if u.id in (v.members_json or [])]
+        q = q.filter(Application.id.in_(ids or [0]))
     return [app_out(s, a) for a in q.order_by(Application.id.desc()).all()]
 
 
@@ -434,6 +568,11 @@ def submit_app(app_id: int, u: User = Depends(require("college")), s=Depends(db)
     audit.log("application.submitted", actor(u), u.role, f"application:{a.id}")
     s.add(Notification(role="officer", message=f"New submission {a.ref} from {a.college.name}", link=f"/applications/{a.id}"))
     s.commit()
+    from . import workflow
+    workflow.route_application(s, a, actor(u), u.role)
+    from .wf_api import notify_mismatches
+    notify_mismatches(s, a, "system (cross-document check on submit)", "system")
+    s.refresh(a)
     return app_out(s, a, True)
 
 
@@ -556,10 +695,17 @@ def decide(app_id: int, body: DecisionIn, u: User = Depends(require("officer", "
             audit.log("decision.blocked", actor(u), u.role, f"application:{a.id}", {"reason": "two-person override required"})
             raise HTTPException(409, "This application has documents flagged as possible forgeries. Approval needs a "
                                      "two-person security override (Officer + a different Senior Officer).")
+    from . import workflow
+    w = s.get(workflow.AppWorkflow, a.id)
+    if w and body.decision in ("approve", "reject") and w.state != "awaiting_decision":
+        audit.log("decision.blocked", actor(u), u.role, f"application:{a.id}", {"reason": "workflow stage", "stage": w.current_stage, "state": w.state})
+        raise HTTPException(409, f"The workflow is at '{workflow.stage_label(workflow.active_config(s), w.current_stage)}' ({w.state}). "
+                                 "Complete the configured stages before the final decision.")
     a.decision = {"approve": "Approved", "reject": "Rejected", "request_changes": "Changes Requested"}[body.decision]
     a.decision_reason, a.decision_by, a.decided_at = body.reason, u.id, now()
     s.commit()
     audit.log("decision.recorded", actor(u), u.role, f"application:{a.id}", {"decision": a.decision, "reason": body.reason[:300]})
+    workflow.on_decision(s, a, actor(u), u.role)
     s.add(Notification(college_id=a.college_id, message=f"{a.ref}: {a.decision}", link=f"/applications/{a.id}"))
     s.commit()
     return app_out(s, a, True)
@@ -1028,9 +1174,11 @@ def notifications(u: User = Depends(current_user), s=Depends(db)):
     q = s.query(Notification)
     if u.role == "college":
         q = q.filter(Notification.college_id == u.college_id)
+    elif u.role == "evc_member":
+        q = q.filter(Notification.user_id == u.id)
     else:
         roles = {"officer": ["officer"], "senior_officer": ["officer", "senior_officer"], "admin": ["officer", "senior_officer", "admin"]}[u.role]
-        q = q.filter(Notification.role.in_(roles))
+        q = q.filter(Notification.role.in_(roles), (Notification.user_id.is_(None)) | (Notification.user_id == u.id))
     return [{"id": n.id, "message": n.message, "link": n.link, "read": n.read, "created_at": n.created_at.isoformat(),
              "kind": n.kind, "severity": n.severity or "info"}
             for n in q.order_by(Notification.id.desc()).limit(30)]
@@ -1086,6 +1234,9 @@ def stats(u: User = Depends(current_user), s=Depends(db)):
 
 
 # ---------------- frontend ----------------
+from . import wf_api  # noqa: E402  (workflow module; imports the auth dependencies defined above)
+app.include_router(wf_api.router)
+
 if FRONTEND_DIST.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
 

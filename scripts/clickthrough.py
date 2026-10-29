@@ -14,7 +14,8 @@ SAMPLES = ROOT / "seed" / "samples"
 PW = "Demo@2026"
 PRINCIPALS = ["svit", "gvce", "diem", "mct"]
 STAFF = ["officer", "officer2", "senior", "admin"]
-DENY = re.compile(r"sign out|reject|approve|submit|delete|revoke|confirm|reopen|re-analy|reveal|cancel|finish|create|logout|rotate|purge|decide|send test|sync now|issue|verify|encrypt|request|generate|start 3|tour", re.I)
+SHOTS = Path(os.environ.get("SHOTS", ROOT.parent / "screenshots"))
+DENY = re.compile(r"sign out|reject|approve|submit|delete|revoke|confirm|reopen|re-analy|reveal|cancel|finish|create|logout|rotate|purge|decide|send test|sync now|issue|verify|encrypt|request|generate|start 3|tour|close visit|schedule|save|notify|resubmit|run deadline|advance|return|revert|send back|accept|upload|record|subscribe|start form|next|reset|everywhere|change password|create account", re.I)
 results: list[dict] = []
 issues: list[str] = []          # console errors / exceptions / bad responses for the current check
 
@@ -54,7 +55,7 @@ def email(role):
 
 
 def login(page, role):
-    page.goto(f"{BASE}/login"); page.wait_for_load_state("networkidle")
+    page.goto(f"{BASE}/login"); page.evaluate("localStorage.removeItem('sealcheck.token')"); page.goto(f"{BASE}/login"); page.wait_for_load_state("networkidle")
     page.click(f'[data-testid="demo-{email(role)}"]')
     page.wait_for_url(lambda u: "/login" not in u, timeout=15000); page.wait_for_load_state("networkidle")
 
@@ -301,6 +302,94 @@ def staff_flows(br, role, shared):
     ctx.close()
 
 
+def shot(page, name):
+    SHOTS.mkdir(parents=True, exist_ok=True); settle(page); page.screenshot(path=str(SHOTS / name), full_page=True)
+
+
+def workflow_flows(br, shared):
+    """Workflow features: wizard with drafts, calendar, pendency, EVC (officer + member), compliance, reports, config."""
+    ctx = br.new_context(viewport={"width": 1440, "height": 900}, accept_downloads=True); page = ctx.new_page(); attach(page)
+    login(page, "svit")
+    def wizard():
+        page.goto(BASE + "/apply"); settle(page)
+        page.locator("main button[aria-pressed]").first.click(); page.click('[data-testid="wizard-create"]')
+        page.wait_for_url(re.compile(r"/apply/\d+$"), timeout=15000); settle(page); shared["wizard_url"] = page.url
+        page.click('[data-testid="wizard-next"]'); settle(page)
+        assert page.locator('[data-testid="wizard-step-1"]').count(), "did not reach institution step"
+        page.click('[data-testid="wizard-next"]'); settle(page)  # empty form must be blocked
+        assert page.locator('[data-testid="wizard-step-1"]').count() and page.locator("text=Required").count(), "per-step validation did not block"
+        vals = {"institution_name": "Sri Venkateswara Institute of Technology", "trust_name": "Sri Venkateswara Educational Trust", "address": "NH-44, Anantapur, Andhra Pradesh",
+                "survey_no": "142/3B", "land_area": "12.5 acres", "signatory": "Dr. K. Ramesh, Principal"}
+        for k, v in vals.items(): page.fill(f'[data-testid="f-{k}"]', v)
+        shot(page, "52_wizard_institution_step.png")
+        page.click('[data-testid="wizard-next"]'); settle(page)
+        assert page.locator('[data-testid="wizard-step-2"]').count(), "did not reach first document step"
+        page.reload(); settle(page)  # resume from saved draft
+        assert page.locator('[data-testid="wizard-step-2"]').count(), "draft did not resume at the saved step"
+        f = next(p for p in sorted(SAMPLES.glob("svit_*")) if p.suffix == ".pdf")
+        page.set_input_files('[data-testid="wizard-file"]', str(f)); time.sleep(2); settle(page)
+        shot(page, "53_wizard_upload_step_progress.png")
+    check("workflow", "svit", "wizard: validation, draft resume, upload step")(wizard)()
+    def compliance():
+        page.goto(BASE + "/compliance"); settle(page); assert page.locator('[data-testid="ut-table"]').count()
+        shot(page, "54_compliance_undertakings.png")
+        page.get_by_role("tab", name=re.compile("Document validity")).click(); settle(page); shot(page, "55_compliance_validity.png")
+    check("workflow", "svit", "undertakings + validity page")(compliance)()
+    ctx.close()
+    ctx = br.new_context(viewport={"width": 1440, "height": 900}, accept_downloads=True); page = ctx.new_page(); attach(page)
+    login(page, "senior")
+    def cal():
+        page.goto(BASE + "/calendar"); settle(page); assert page.locator('[data-testid="cal-month"]').count()
+        assert page.locator('[data-testid="safeguard"]').count(), "safeguard banner missing"
+        shot(page, "56_calendar_month.png")
+        page.get_by_role("tab", name=re.compile("Agenda")).click(); settle(page); shot(page, "57_calendar_agenda.png")
+        page.click('[data-testid="ics-subscribe"]'); settle(page); url = page.locator('[data-testid="ics-box"] code').inner_text()
+        r = page.request.get(url.replace(url.split("/api/")[0], BASE)); assert r.ok and "BEGIN:VCALENDAR" in r.text(), "ICS feed"
+    check("workflow", "senior", "calendar month/agenda + ICS feed")(cal)()
+    def pend():
+        page.goto(BASE + "/pendency"); settle(page); assert page.locator('[data-testid="pend-stats"]').count(); shot(page, "58_pendency_dashboard.png")
+    check("workflow", "senior", "pendency dashboard")(pend)()
+    def detail():
+        apps = page.evaluate("fetch('/api/applications', {headers: {Authorization: 'Bearer ' + localStorage.getItem('sealcheck.token')}}).then(r => r.json())")
+        g = next(a for a in apps if "GVCE" in a["ref"] and a["submitted_at"])
+        page.goto(f"{BASE}/applications/{g['id']}"); settle(page)
+        assert page.locator('[data-testid="workflow-panel"]').count() and page.locator('[data-testid="crosscheck"]').count(), "workflow panel / cross-check missing"
+        page.locator('[data-testid="workflow-panel"]').scroll_into_view_if_needed(); shot(page, "59_application_workflow_crosscheck.png")
+    check("workflow", "senior", "application workflow panel + cross-document mismatches")(detail)()
+    def evc():
+        page.goto(BASE + "/evc"); settle(page); assert page.locator('[data-testid="evc-queue"]').count(); shot(page, "60_evc_queue.png")
+        page.get_by_role("button", name="Summary").first.click(); page.wait_for_selector('[data-testid="evc-summary"]'); shot(page, "61_evc_summary.png"); page.keyboard.press("Escape")
+        with page.expect_download() as d: page.get_by_role("button", name="PDF").first.click()
+        assert d.value.suggested_filename.endswith(".pdf")
+    check("workflow", "senior", "EVC queue, on-screen summary, PDF")(evc)()
+    def reports():
+        page.goto(BASE + "/reports"); settle(page); assert page.locator('[data-testid="rep-table"] table').count(); shot(page, "62_reports.png")
+        for fmt in ("csv", "pdf"):
+            with page.expect_download() as d: page.click(f'[data-testid="rep-{fmt}"]')
+            assert d.value.suggested_filename.endswith(fmt)
+    check("workflow", "senior", "reports + CSV/PDF export")(reports)()
+    ctx.close()
+    ctx = br.new_context(viewport={"width": 1440, "height": 900}); page = ctx.new_page(); attach(page)
+    login(page, "evc1")
+    def member():
+        page.wait_for_url("**/evc"); settle(page)
+        page.click('[data-testid="evc-report"]'); page.wait_for_selector('[data-testid="evc-checklist"]'); shot(page, "63_evc_member_checklist.png")
+        page.keyboard.press("Escape")
+        assert not page.locator('[data-testid="evc-complete"]').count(), "EVC member must not be able to close a visit"
+        st = page.evaluate("fetch('/api/applications/1/decision', {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + localStorage.getItem('sealcheck.token')}, body: JSON.stringify({decision: 'approve', note: 'x'})}).then(r => r.status)")
+        assert st in (403, 404, 422), st
+        issues.clear()  # the 403 above is the expected outcome
+    check("workflow", "evc1", "EVC member checklist, no decision rights")(member)()
+    ctx.close()
+    ctx = br.new_context(viewport={"width": 1440, "height": 900}); page = ctx.new_page(); attach(page)
+    login(page, "admin")
+    def cfg():
+        page.goto(BASE + "/workflow-config"); settle(page); assert page.locator('[data-testid="wf-json"]').count(); shot(page, "64_workflow_config.png")
+        page.get_by_role("tab", name="Regions").click(); settle(page); shot(page, "65_workflow_regions.png")
+    check("workflow", "admin", "workflow config + regions")(cfg)()
+    ctx.close()
+
+
 def login_themes(br):
     ctx = br.new_context(); page = ctx.new_page(); attach(page)
     def t():
@@ -340,12 +429,72 @@ def mobile(br):
     ctx.close()
 
 
+def accounts_flows(br, shared):
+    """Username + password signup -> pending -> admin approval -> sign-in; admin reset -> forced change; logout everywhere."""
+    ctx = br.new_context(viewport={"width": 1440, "height": 900}); page = ctx.new_page(); attach(page)
+    un = f"ctofficer{int(time.time()) % 100000}"; pw = "Kestrel-Harbour-71"; pw2 = "Lantern-Orchid-58!"
+    def signup():
+        page.goto(BASE + "/login"); settle(page); shot(page, "66_login_username_password.png")
+        page.click('[data-testid="goto-signup"]'); page.wait_for_url(re.compile("/signup")); settle(page)
+        page.click('[data-testid="su-role-officer"]'); page.click('[data-testid="su-submit"]'); settle(page)
+        assert page.locator('[role="alert"]').count() >= 2, "empty signup not rejected with field errors"
+        issues.clear()  # the 422 above is the expected validation response
+        page.fill('[data-testid="su-full_name"]', "Clickthrough Officer"); page.fill('[data-testid="su-username"]', un)
+        page.fill('[data-testid="su-email"]', f"{un}@example.org"); page.fill('[data-testid="su-phone"]', "9876543210")
+        page.fill('[data-testid="su-password"]', "password123"); settle(page); time.sleep(0.6)
+        assert page.locator('[data-testid="pw-meter"] li').count(), "common password not flagged"
+        page.fill('[data-testid="su-password"]', pw); page.fill('[data-testid="su-confirm"]', pw)
+        page.select_option('[data-testid="su-region"]', index=1); page.fill('[data-testid="su-designation"]', "Deputy Director")
+        page.check('[data-testid="su-consent"]'); time.sleep(0.6); shot(page, "67_signup_officer_form.png")
+        page.click('[data-testid="su-submit"]'); page.wait_for_url(re.compile("/onboarding"), timeout=15000); settle(page)
+        shot(page, "68_signup_pending_approval.png")
+    check("accounts", "new", "signup with field errors + strength check -> pending")(signup)()
+    def approve():
+        login(page, "admin"); page.goto(BASE + "/admin"); settle(page)
+        row = page.locator("tr", has_text=f"{un}@example.org").first
+        row.locator('[data-testid^="approve-"]').click(); settle(page); time.sleep(0.5)
+        shot(page, "69_admin_approved_and_user_accounts.png")
+    check("accounts", "admin", "admin approves officer signup")(approve)()
+    def signin():
+        page.evaluate("localStorage.clear()"); page.goto(BASE + "/login"); settle(page)
+        page.fill('[data-testid="signin-username"]', un); page.fill('[data-testid="signin-password"]', "wrong-Password-1")
+        page.click('[data-testid="signin-submit"]'); settle(page)
+        time.sleep(0.5); assert page.locator('text=/Sign-in failed/').count(), "no generic error on bad password"
+        issues.clear()  # the 401 above is expected
+        page.fill('[data-testid="signin-password"]', pw); page.click('[data-testid="signin-submit"]')
+        page.wait_for_url(lambda u: "/login" not in u and "/onboarding" not in u, timeout=15000); settle(page)
+        me = page.evaluate("fetch('/api/auth/me',{headers:{Authorization:'Bearer '+localStorage.getItem('sealcheck.token')}}).then(r=>r.json())")
+        assert me["role"] == "officer", me
+    check("accounts", "new", "approved officer signs in with username")(signin)()
+    def reset_flow():
+        login(page, "admin"); page.goto(BASE + "/admin"); settle(page)
+        page.once("dialog", lambda d: d.accept())
+        page.locator("tr", has_text=f"{un}@example.org").last.locator("button", has_text="Reset password").click(); settle(page)
+        tmp = page.locator('[data-testid="temp-password"] code').inner_text().strip(); assert tmp
+        shot(page, "70_admin_reset_temp_password.png")
+        page.evaluate("localStorage.clear()"); page.goto(BASE + "/login"); settle(page)
+        page.fill('[data-testid="signin-username"]', un); page.fill('[data-testid="signin-password"]', tmp)
+        page.click('[data-testid="signin-submit"]'); page.wait_for_url(re.compile("/account"), timeout=15000); settle(page)
+        page.fill("#pw-current", tmp); page.fill("#pw-new", pw2); page.fill("#pw-confirm", pw2); time.sleep(0.6)
+        shot(page, "71_forced_password_change.png")
+        page.click('[data-testid="pw-submit"]'); settle(page); time.sleep(0.5)
+        page.goto(BASE + "/"); settle(page); assert "/account" not in page.url, page.url
+        page.goto(BASE + "/account"); settle(page)
+        page.once("dialog", lambda d: d.accept()); page.click('[data-testid="logout-all"]')
+        page.wait_for_url(re.compile("/login"), timeout=15000)
+    check("accounts", "new", "admin reset -> forced change -> sign out everywhere")(reset_flow)()
+    ctx.close()
+
+
 def main():
     t0 = time.time(); shared = {}
     with sync_playwright() as p:
         br = p.chromium.launch()
+        workflow_flows(br, shared)
+        accounts_flows(br, shared)
         for r in PRINCIPALS: college_flows(br, r)
         for r in ["officer", "senior", "officer2", "admin"]: staff_flows(br, r, shared)
+        ctx, _ = run_role(br, "evc1"); ctx.close()
         login_themes(br); portal_checks(br); mobile(br)
         br.close()
     out = ROOT / "clickthrough_report.json"

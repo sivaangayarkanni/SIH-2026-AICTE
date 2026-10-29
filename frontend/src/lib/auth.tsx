@@ -2,9 +2,9 @@ import { createContext, useContext, useEffect, useRef, useState, ReactNode } fro
 import { api } from './api'
 import { OidcCfg, startLogin, endSession, refresh, schedule } from './oidc'
 
-export type User = { id: number; email: string; name: string; title: string; role: 'pending' | 'college' | 'officer' | 'senior_officer' | 'admin'; access_status?: string | null; role_label: string; college: string | null; college_id: number | null; avatar_seed: string }
-export type AuthCfg = { mode: 'local' | 'oidc' | 'google'; env?: string; idle_timeout_min: number; oidc: OidcCfg | null; demo_accounts: boolean; password_login?: boolean; google?: { enabled: boolean; notice: string | null }; demo_notice?: string | null }
-type Ctx = { user: User | null; loading: boolean; cfg: AuthCfg | null; login: (e: string, p: string) => Promise<User>; sso: (returnTo?: string) => Promise<void>; logout: (reason?: string) => void; setUser: (u: User | null) => void }
+export type User = { id: number; email: string; name: string; title: string; role: 'pending' | 'college' | 'officer' | 'senior_officer' | 'admin' | 'evc_member'; access_status?: string | null; role_label: string; college: string | null; college_id: number | null; avatar_seed: string; username?: string | null; must_change_password?: boolean }
+export type AuthCfg = { mode: 'local' | 'password' | 'oidc' | 'google'; signup?: boolean; env?: string; idle_timeout_min: number; oidc: OidcCfg | null; demo_accounts: boolean; password_login?: boolean; google?: { enabled: boolean; notice: string | null }; demo_notice?: string | null }
+type Ctx = { user: User | null; loading: boolean; cfg: AuthCfg | null; login: (e: string, p: string) => Promise<User>; adopt: (token: string, u: User) => void; sso: (returnTo?: string) => Promise<void>; logout: (reason?: string) => void; setUser: (u: User | null) => void }
 const Ctx = createContext<Ctx>(null!)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -38,11 +38,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { evs.forEach((e) => window.removeEventListener(e, bump)); clearInterval(iv) }
   }, [user, cfg]) // eslint-disable-line react-hooks/exhaustive-deps
   const login = async (email: string, password: string) => {
-    const r = await api<{ token: string; user: User }>('/api/auth/login', { method: 'POST', json: { email, password } })
+    const r = await api<{ token: string; user: User }>('/api/auth/login', { method: 'POST', json: { username: email, password } })
     localStorage.setItem('sealcheck.token', r.token); setUser(r.user); return r.user
   }
+  const adopt = (token: string, u: User) => { localStorage.setItem('sealcheck.token', token); setUser(u) }
   const sso = async (returnTo = '/') => { if (cfg?.oidc) await startLogin(cfg.oidc, returnTo) }
-  return <Ctx.Provider value={{ user, loading, cfg, login, sso, logout, setUser }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ user, loading, cfg, login, adopt, sso, logout, setUser }}>{children}</Ctx.Provider>
 }
 export const useAuth = () => useContext(Ctx)
 export const isStaff = (u: User | null) => !!u && u.role !== 'college' && u.role !== 'pending'

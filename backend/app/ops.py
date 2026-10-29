@@ -162,8 +162,8 @@ def validate_production_config(env: dict | None = None) -> list[str]:
     p = []
     if len(e.get("SEALCHECK_JWT_SECRET", "")) < 32:
         p.append("SEALCHECK_JWT_SECRET must be set (>=32 chars)")
-    if e.get("AUTH_MODE", "local") not in ("oidc", "google"):
-        p.append("AUTH_MODE must be oidc or google (local demo login is disabled in production)")
+    if e.get("AUTH_MODE", "local") not in ("password", "oidc", "google"):
+        p.append("AUTH_MODE must be password, oidc or google (local demo login is disabled in production)")
     if e.get("AUTH_MODE") == "google" and not e.get("PUBLIC_BASE_URL", "").startswith(("https://", "http://localhost:", "http://127.0.0.1:")):
         p.append("PUBLIC_BASE_URL must be the https:// origin used in the Google redirect URI")
     if e.get("AUTH_MODE") == "oidc" and not e.get("OIDC_ISSUER"):

@@ -1,7 +1,7 @@
 import { Tour } from './Tour'
 import { ReactNode, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, FileStack, FilePlus2, ClipboardCheck, ListOrdered, ShieldAlert, Network, ShieldCheck, ScrollText, BookOpenCheck, Settings, Workflow, Bell, Wifi, WifiOff, LogOut, Activity, Menu, Moon, Sun, CloudUpload } from 'lucide-react'
+import { LayoutDashboard, FileStack, FilePlus2, ClipboardCheck, ListOrdered, ShieldAlert, Network, ShieldCheck, ScrollText, BookOpenCheck, Settings, Workflow, Bell, Wifi, WifiOff, LogOut, Activity, Menu, Moon, Sun, CloudUpload, CalendarDays, Hourglass, Users, FileCheck2, FileBarChart, SlidersHorizontal } from 'lucide-react'
 import clsx from 'clsx'
 import { Logo } from './Logo'
 import { DemoNotice, GovBar, Tricolour, UtilityBar, Masthead, PortalNav, Breadcrumbs, PortalFooter, useLabel } from './Portal'
@@ -16,12 +16,20 @@ type Item = { to: string; label: string; icon: any; roles: string[] }
 export const NAV: { group: string; items: Item[] }[] = [
   { group: 'Overview', items: [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['college', 'officer', 'senior_officer', 'admin'] },
-    { to: '/how-it-works', label: 'How it works', icon: Workflow, roles: ['college', 'officer', 'senior_officer', 'admin'] },
+    { to: '/how-it-works', label: 'How it works', icon: Workflow, roles: ['college', 'officer', 'senior_officer', 'admin', 'evc_member'] },
   ] },
   { group: 'College workspace', items: [
     { to: '/applications', label: 'My applications', icon: FileStack, roles: ['college'] },
-    { to: '/applications/new', label: 'New application', icon: FilePlus2, roles: ['college'] },
+    { to: '/apply', label: 'New application', icon: FilePlus2, roles: ['college'] },
     { to: '/readiness', label: 'Readiness assistant', icon: ClipboardCheck, roles: ['college'] },
+  ]},
+  { group: 'Workflow', items: [
+    { to: '/pendency', label: 'Pendency & deadlines', icon: Hourglass, roles: ['college', 'officer', 'senior_officer', 'admin'] },
+    { to: '/calendar', label: 'Deadline calendar', icon: CalendarDays, roles: ['college', 'officer', 'senior_officer', 'admin', 'evc_member'] },
+    { to: '/evc', label: 'EVC visits', icon: Users, roles: ['officer', 'senior_officer', 'admin', 'evc_member'] },
+    { to: '/compliance', label: 'Undertakings & validity', icon: FileCheck2, roles: ['college', 'officer', 'senior_officer', 'admin'] },
+    { to: '/reports', label: 'Reports', icon: FileBarChart, roles: ['officer', 'senior_officer', 'admin'] },
+    { to: '/workflow-config', label: 'Workflow config', icon: SlidersHorizontal, roles: ['officer', 'senior_officer', 'admin'] },
   ] },
   { group: 'Scrutiny', items: [
     { to: '/queue', label: 'Priority queue', icon: ListOrdered, roles: ['officer', 'senior_officer', 'admin'] },
@@ -32,16 +40,17 @@ export const NAV: { group: string; items: Item[] }[] = [
   { group: 'Trust & governance', items: [
     { to: '/security', label: 'Security center', icon: ShieldCheck, roles: ['college', 'officer', 'senior_officer', 'admin'] },
     { to: '/audit', label: 'Audit log', icon: ScrollText, roles: ['officer', 'senior_officer', 'admin'] },
-    { to: '/rules', label: 'Rule bundles', icon: BookOpenCheck, roles: ['college', 'officer', 'senior_officer', 'admin'] },
+    { to: '/rules', label: 'Rule bundles', icon: BookOpenCheck, roles: ['college', 'officer', 'senior_officer', 'admin', 'evc_member'] },
     { to: '/admin', label: 'System health', icon: Activity, roles: ['admin', 'senior_officer', 'officer'] },
-    { to: '/notifications', label: 'Notification centre', icon: Bell, roles: ['college', 'officer', 'senior_officer', 'admin'] },
-    { to: '/settings', label: 'Settings & themes', icon: Settings, roles: ['college', 'officer', 'senior_officer', 'admin'] },
+    { to: '/notifications', label: 'Notification centre', icon: Bell, roles: ['college', 'officer', 'senior_officer', 'admin', 'evc_member'] },
+    { to: '/settings', label: 'Settings & themes', icon: Settings, roles: ['college', 'officer', 'senior_officer', 'admin', 'evc_member'] },
   ] },
 ]
 
 const ROLE_CHIP: Record<string, string> = {
   college: 'bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300', officer: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300',
   senior_officer: 'bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300', admin: 'bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300',
+  evc_member: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
 }
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -102,6 +111,7 @@ export function Layout({ children }: { children: ReactNode }) {
             {open === 'me' && (
               <div className="card animate-fadeUp absolute right-0 mt-2 w-72 p-2 shadow-pop">
                 <div className="flex items-center gap-3 p-3"><Avatar seed={user.avatar_seed} size={44} /><div className="min-w-0"><div className="truncate font-semibold">{user.name}</div><div className="truncate text-xs text-muted">{user.email}</div></div></div>
+                <button className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-2" data-testid="menu-account" onClick={() => nav('/account')}>My account & password</button>
                 <button className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-2" onClick={() => nav('/settings')}>Settings & themes</button>
                 <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10" onClick={() => { logout(); nav('/login') }}><LogOut className="h-4 w-4" />Sign out</button>
               </div>
