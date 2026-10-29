@@ -1,5 +1,6 @@
 {
   "name": "frontend",
+  "description": "SealCheck UI: integrated AICTE approval workflow automation, compliance monitoring and alert management (SIH26262 prototype)",
   "private": true,
   "version": "0.0.0",
   "type": "module",

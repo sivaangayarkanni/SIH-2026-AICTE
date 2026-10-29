@@ -12,7 +12,8 @@ const STEPS = [
   { n: '5', i: Scale, t: 'Deterministic policy engine', d: 'An ordered rule table (P1–P6) turns findings into one of six statuses. Same input, same output, every time.', who: 'Policy' },
   { n: '6', i: Bot, t: 'Agents explain', d: 'Advocate, Critic and Head agents debate the evidence in plain language. They cannot change the status.', who: 'Explainability' },
   { n: '7', i: UserCheck, t: 'Officer decides', d: 'Priority queue, highlighted evidence, Q&A with citations. Forgery flags need a two-person override.', who: 'Human' },
-  { n: '8', i: FileCheck2, t: 'Evidence packet & audit', d: 'Signed-off decisions, evidence PDFs and a hash-chained audit trail that anyone can re-verify.', who: 'Record' },
+  { n: '8', i: ArrowDown, t: 'Workflow, compliance & alerts', d: 'The application moves through configurable stages (scrutiny, EVC, review, decision) with SLA clocks. EVC visits are scheduled, undertakings and lease/document validity are tracked, reminders go out before deadlines and missed ones escalate to officers. Everything shows on the calendar, pendency dashboard and reports.', who: 'Workflow' },
+  { n: '9', i: FileCheck2, t: 'Evidence packet & audit', d: 'Signed-off decisions, evidence PDFs and a hash-chained audit trail that anyone can re-verify.', who: 'Record' },
 ]
 const STATUSES = [
   ['Verified', 'All checks passed.', 'bg-emerald-500'], ['Mismatch Detected', 'Forgery indicator found — hidden text, overlay, broken signature or reused photo.', 'bg-amber-500'],
@@ -23,7 +24,7 @@ const STATUSES = [
 export default function HowItWorks() {
   return (
     <>
-      <PageHeader eyebrow="Plain-language guide" title="How SealCheck works" desc="Zero trust means no file is trusted because of who uploaded it. Every document is proven genuine by evidence — or flagged with the exact reason." />
+      <PageHeader eyebrow="Plain-language guide" title="How SealCheck works" desc="SealCheck runs the AICTE approval workflow end to end and verifies every document on the way. No file is trusted because of who uploaded it: each is proven genuine by evidence, or flagged with the exact reason." />
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <ol className="space-y-2">{STEPS.map((s, i) => (
           <li key={s.n}>

@@ -1,10 +1,64 @@
-# SealCheck — Zero-Trust AI Compliance Platform for AICTE (SIH 2026 · SIH26261)
+# SealCheck: Integrated AICTE Approval Workflow Automation, Compliance Monitoring and Alert Management (SIH 2026 · SIH26262)
 
-SealCheck checks the documents that colleges submit for AICTE approval: land deeds, fire NOCs, faculty lists, lab photos and others. Every file is treated as hostile. It is opened in an isolated sandbox worker and rebuilt with Content Disarm & Reconstruction (CDR). It is then checked by forensic, rule, photo and collusion modules. A deterministic policy engine assigns one of six statuses. **AI explains, humans decide.** Officers make every decision. Approving a flagged document needs a two-person override, and every action is written to a hash-chained audit log.
+**Approval workflow automation, compliance monitoring and alert management, with AI document verification built in.**
 
-> Prototype status: everything in this repo runs end to end on one machine. Components that would be external services in production (HSM/KMS, DigiLocker/issuer registries, a container sandbox) are **simulated with clearly-labelled adapters**. See [Real vs simulated](#real-vs-simulated).
+SealCheck is a prototype for Smart India Hackathon 2026 problem statement **SIH26262** (AICTE · Software · Smart Automation). It runs the AICTE approval process end to end:
+- configurable **stage routing** with auto-advance and return/revert with reason
+- **EVC** queueing, scheduling and summary
+- **undertakings** with evidence and verification
+- **lease and document validity** tracking and renewal
+- **deadline reminders and escalation** to officers
+- a **calendar**, **pendency dashboards**, CSV/PDF **reports** and a hash-chained **audit trail**
 
-## Architecture
+Its standout differentiator is **AI document verification** of every uploaded file: PDF forensics, DSC signature checks, photo forensics, cross-document consistency, issuer checks and evidence packets. Every file is treated as hostile (sandbox + Content Disarm & Reconstruction), and a deterministic policy engine assigns the status. **AI explains, humans decide:** officers take every decision, and flagged documents need a two-person override.
+
+> **Safeguard:** Automated alerts, recommendations and workflow actions support the approval process. They do not replace statutory scrutiny, verification, inspections or decisions taken by the competent authority.
+
+> Prototype status: prototype, not an official AICTE system. Everything in this repo runs end to end on one machine. Components that would be external services in production (HSM/KMS, DigiLocker/issuer registries, a container sandbox, the AICTE portal itself) are **simulated with clearly labelled adapters**. See [Real vs simulated](#real-vs-simulated). All demo data is synthetic.
+
+## Problem statement SIH26262 → where SealCheck implements it
+
+The left column paraphrases the problem statement's sections. "Partial" or "Gap" is stated honestly.
+
+| Problem statement section | SealCheck feature | Screen | Files | Status |
+|---|---|---|---|---|
+| **A. Workflow automation**: configurable routes, automatic movement between stages, return/revert with reasons | Stage router with signed, versioned config; auto-advance on stage completion; return-to-institution and revert need a reason; stage history | Application page (workflow panel), `/workflow-config` | `backend/app/workflow.py`, `backend/app/rules/workflow.yaml`, `backend/app/wf_api.py`, `frontend/src/components/WorkflowPanel.tsx` | Done |
+| **B. Monitoring dashboards**: pendency, ageing, bottlenecks, alerts | Pendency dashboard by region, stage, officer and institution; ageing buckets; overdue/approaching items; bottleneck stages (mean days); open alerts | `/pendency` | `backend/app/wf_reports.py`, `frontend/src/pages/Pendency.tsx` | Done |
+| **C. EVC management**: queueing, scheduling, completion, reminders | EVC queue, schedule (date + members), member observations against a checklist, close visit, summarised EVC form (screen + PDF), visit reminders and escalation | `/evc` | `backend/app/workflow.py`, `frontend/src/pages/Evc.tsx` | Done |
+| **D. Undertakings and compliance**: evidence, verification, escalation | Undertakings with due dates, evidence upload, officer verify/reject, escalation when overdue | `/compliance` (Undertakings tab) | `frontend/src/pages/Compliance.tsx`, `backend/app/wf_api.py` | Done |
+| **E. Document validity**: lease, NOC and FDR expiry tracking and renewal | Validity end dates per document type, reminders 60/30/15/7/1 days before expiry, renewal upload + verification; DSC and validity-date checks during document verification | `/compliance` (Validity tab), document panel | `backend/app/workflow.py`, `backend/app/pipeline/rule_engine.py` | Done |
+| **F. Alerts, notifications, reports, audit**: configurable notifications and escalation, CSV/PDF reports, full audit trail | Configurable reminder offsets and escalation ladders (Regional officer → Bureau officer → admin); in-app notifications (email only when SMTP is configured); a calendar with ICS feed; CSV/PDF reports; hash-chained audit log with verify | Bell, `/calendar`, `/reports`, `/audit` | `backend/app/notify.py`, `backend/app/wf_reports.py`, `backend/app/audit.py` | Done (email: needs SMTP) |
+| **Key requirement: role-based access** | Roles: college, EVC member, Regional officer, Bureau officer, admin. Username + password accounts; non-college roles need admin approval | `/signup`, `/admin` | `backend/app/accounts.py`, [docs/ACCOUNTS_AND_ROLES.md](docs/ACCOUNTS_AND_ROLES.md) | Done |
+| **Key requirement: integration with existing portals** | `PortalAdapter` interface for fetching applications and pushing stage changes/alerts; issuer-connector examples | `/workflow-config` (Integrations) | `backend/app/integrations.py`, `deploy/issuer-connectors.example.yaml` | **Gap:** interface only; not connected to any real AICTE or issuer system |
+| **Key requirement: scheduled automation** | Idempotent deadline evaluator; daily Vercel cron (`/api/cron/evaluate`); dev background scheduler | `/workflow-config` (Scheduler runs) | `backend/app/workflow.py`, `vercel.json` | Done |
+| **Key requirement: document verification** (differentiator) | PDF forensics (hidden text, overlays, incremental edits), DSC validation, photo forensics (EXIF, pHash/ORB reuse), cross-document core-field consistency, issuer registry checks, collusion graph, evidence packets | Application page, `/queue`, `/collusion` | `backend/app/pipeline/*`, `backend/app/crosscheck.py` | Done. Issuer checks use simulated registries |
+| **Prototype criteria: working end-to-end demo** | Live deployment (Vercel + Neon Postgres, no demo data) plus a local demo with synthetic data and one-click personas | All | `run.sh`, `api/index.py`, `seed/` | Done |
+| **Prototype criteria: human oversight** | Deterministic policy; AI agents explain only; officers decide; two-person override for flagged documents; safeguard notice in the UI | `/queue`, `/overrides` | `backend/app/pipeline/policy.py`, `backend/app/agents.py` | Done |
+| **Prototype criteria: security and audit** | Sandbox + CDR, envelope encryption, WORM store, PII vault, bcrypt passwords with lockout, token revocation, hash-chained audit | `/security`, `/audit` | [docs/SECURITY.md](docs/SECURITY.md) | Done (sandbox is process-level on Vercel) |
+| **Scale and performance** | Inline jobs on serverless; Redis queue + workers available for self-hosting | n/a | `docs/PRODUCTION.md` | **Not load-tested.** No performance figures are claimed |
+
+Stage names, SLA days and region names are editable placeholders, not quotations from the AICTE Approval Process Handbook.
+
+## Workflow, compliance and alerts (core)
+
+Full detail is in [docs/WORKFLOW.md](docs/WORKFLOW.md). The architecture image is [docs/sealcheck_architecture_1920x1080.png](docs/sealcheck_architecture_1920x1080.png).
+
+| Area | What you get | Where |
+|---|---|---|
+| Application wizard | Google-Form-like steps, a progress bar, drafts you can save and resume, per-step validation | `/apply` |
+| Cross-document check | Core fields compared across documents. Each mismatch is returned to the institution as "to be corrected / re-uploaded" and flagged to officers | Wizard review, application page |
+| Routes | Configurable stages and routes, auto-advance, return/revert with a reason | `rules/workflow.yaml`, `/workflow-config` |
+| Reminders and escalation | Reminders before each deadline. After a missed deadline, escalation to the Regional officer, then the Bureau officer, then the admin | Daily cron, in-app and email (SMTP) |
+| Calendar | Month and agenda views, ICS subscription | `/calendar` |
+| Pendency | Ageing, bottlenecks, overdue, alerts, by region/stage/officer/institution | `/pendency` |
+| EVC | Queue, scheduling, member observations, completion, a summarised EVC form (one page + detail, on screen and PDF) | `/evc` |
+| Undertakings and validity | Evidence, verification and escalation. Validity expiry tracking and renewal | `/compliance` |
+| Reports | CSV and PDF exports; every action is in the hash-chained audit trail | `/reports` |
+| Integration hooks | `PortalAdapter` interface only. Not connected to any real AICTE system | `backend/app/integrations.py` |
+
+Stage names, SLA days and region names are **editable placeholders**, not quotations from the AICTE Approval Process Handbook.
+
+## Architecture (AI document verification pipeline)
 
 ```mermaid
 flowchart LR
@@ -101,27 +155,6 @@ Full script with talking points: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 4. **1:45** Open **Collusion graph**. A faculty PAN is shared between SVIT and GVCE (matched by blind index), and DIEM reuses a lab photo (pHash).
 5. **2:15** Open **Security center**. Watch a 60-second job token expire, run the KMS demo, and verify the audit chain.
 6. **2:40** Sign in as **principal.gvce**. Use the readiness pre-check, the rejection helper and the offline queue (DevTools → offline → upload), and switch themes.
-
-## Approval workflow (deadlines, escalation, EVC, compliance)
-
-> **Safeguard:** Automated alerts, recommendations and workflow actions support the approval process. They do not replace statutory scrutiny, verification, inspections or decisions taken by the competent authority.
-
-Full detail is in [docs/WORKFLOW.md](docs/WORKFLOW.md). The architecture image is [docs/sealcheck_architecture_1920x1080.png](docs/sealcheck_architecture_1920x1080.png).
-
-| Area | What you get | Where |
-|---|---|---|
-| Application wizard | Google-Form-like steps, a progress bar, drafts you can save and resume, per-step validation | `/apply` |
-| Cross-document check | Core fields compared across documents. Each mismatch is returned to the institution as "to be corrected / re-uploaded" and flagged to officers | Wizard review, application page |
-| Routes | Configurable stages and routes, auto-advance, return/revert with a reason | `rules/workflow.yaml`, `/workflow-config` |
-| Reminders and escalation | Reminders before each deadline. After a missed deadline, escalation to the Regional officer, then the Bureau officer, then the admin | Daily cron, in-app and email (SMTP) |
-| Calendar | Month and agenda views, ICS subscription | `/calendar` |
-| Pendency | Ageing, bottlenecks, overdue, alerts, by region/stage/officer/institution | `/pendency` |
-| EVC | Queue, scheduling, member observations, completion, a summarised EVC form (one page + detail, on screen and PDF) | `/evc` |
-| Undertakings and validity | Evidence, verification and escalation. Validity expiry tracking and renewal | `/compliance` |
-| Reports | CSV and PDF exports; every action is in the hash-chained audit trail | `/reports` |
-| Integration hooks | `PortalAdapter` interface only. Not connected to any real AICTE system | `backend/app/integrations.py` |
-
-Stage names, SLA days and region names are **editable placeholders**, not quotations from the AICTE Approval Process Handbook.
 
 ## Production deployment on Vercel (https://sealcheck-nu.vercel.app)
 

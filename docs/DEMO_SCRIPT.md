@@ -1,5 +1,7 @@
 # 3-minute judge demo
 
+Problem statement **SIH26262**: integrated AICTE approval workflow automation, compliance monitoring and alert management. Show the workflow first (wizard → routing → EVC → compliance → pendency/escalation → reports), then the AI document verification.
+
 Setup: run `RESEED=1 ./run.sh` and open http://localhost:8000. Every password is `Demo@2026`, and you can click a demo card on the login page instead of typing.
 
 **Guided option:** officer dashboard → **Start 3-minute demo tour**. The callouts follow the same steps as the table below.

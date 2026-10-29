@@ -1,5 +1,10 @@
 # Architecture
 
+SealCheck is the SIH26262 prototype: integrated AICTE approval workflow automation, compliance monitoring and alert management. AI document verification is built into the same platform.
+The diagram is [sealcheck_architecture_1920x1080.png](sealcheck_architecture_1920x1080.png).
+- **Workflow and alert engine:** stage router, EVC scheduler, undertakings tracker, validity monitor, escalation engine, calendar and reports. See [WORKFLOW.md](WORKFLOW.md).
+- **Verification pipeline:** gateway → sandbox + CDR → modules 4A–4D → policy → agents → officer. It feeds its findings into the workflow (cross-document mismatches, expiry dates).
+
 ## Components
 | Layer | Implementation |
 |---|---|

@@ -29,9 +29,9 @@ export default function Login() {
     try { const u = await login(e, p); toast('success', `Welcome, ${u.name}`, u.role_label) } catch (x: any) { setErr(x.message) } finally { setBusy(null) }
   }
   const feats = [
-    { i: Lock, t: 'Zero-trust intake', d: 'Malware scan, CDR and an isolated sandbox for every file' },
-    { i: ScanSearch, t: 'Forensics that show proof', d: 'Hidden text, overlays and broken DSC signatures highlighted on the page' },
-    { i: Network, t: 'Cross-college collusion', d: 'Shared faculty PANs and recycled lab photos linked in a graph' },
+    { i: Network, t: 'Workflow automation', d: 'Configurable stage routing, EVC scheduling, return/revert with reasons' },
+    { i: Lock, t: 'Compliance & alerts', d: 'Undertakings, lease/document validity, reminders and escalation to officers' },
+    { i: ScanSearch, t: 'AI document verification', d: 'PDF forensics, DSC checks, photo forensics and cross-document consistency' },
     { i: Scale, t: 'Humans decide', d: 'Deterministic policy, explained by AI agents, signed off by officers' },
   ]
   const portal = theme === 'portal'
@@ -102,12 +102,12 @@ export default function Login() {
         <section className="card self-start overflow-hidden p-0">
           <div className="card-head px-5 py-3 text-[15px] font-bold uppercase tracking-wide">About SealCheck</div>
           <div className="p-5">
-            <h1 className="font-display text-[26px] font-bold leading-tight text-primary dark:text-ink">Verify every approval document. Trust nothing until it is proven.</h1>
-            <p className="mt-3 text-[15px] leading-relaxed text-muted">SealCheck checks college submissions for forgery, expiry and collusion, and shows officers exactly where the evidence is, so decisions are fast, fair and defensible.</p>
+            <h1 className="font-display text-[26px] font-bold leading-tight text-primary dark:text-ink">Every AICTE approval, routed, tracked and verified.</h1>
+            <p className="mt-3 text-[15px] leading-relaxed text-muted">SealCheck automates the approval workflow (stage routing, EVC scheduling, undertakings, document validity, deadline alerts and escalation) and adds AI document verification that shows officers exactly where the evidence is. Officers still take every decision.</p>
             <ul className="mt-5 grid gap-3 sm:grid-cols-2">
               {feats.map((f) => <li key={f.t} className="flex gap-3 rounded border border-line bg-surface-2 p-3"><f.i className="mt-0.5 h-5 w-5 shrink-0 text-[color:var(--link)]" /><span><span className="block text-sm font-bold">{f.t}</span><span className="block text-[13px] text-muted">{f.d}</span></span></li>)}
             </ul>
-            <div className="mt-5 rounded px-3 py-2 text-[13px] font-semibold text-[#111]" style={{ background: 'var(--amber)' }}>Smart India Hackathon 2026 · Problem statement SIH26261{cfg?.demo_accounts ? ' · synthetic demo data only' : ' · prototype, not an official AICTE system'}</div>
+            <div className="mt-5 rounded px-3 py-2 text-[13px] font-semibold text-[#111]" style={{ background: 'var(--amber)' }}>Smart India Hackathon 2026 · Problem statement SIH26262{cfg?.demo_accounts ? ' · synthetic demo data only' : ' · prototype, not an official AICTE system'}</div>
           </div>
         </section>
         <section className="card p-6">{panel}</section>
@@ -122,9 +122,9 @@ export default function Login() {
         <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
         <div className="relative">
           <Logo light size={40} />
-          <div className="mt-8 inline-flex lg:mt-10 items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold backdrop-blur"><Fingerprint className="h-3.5 w-3.5" />Smart India Hackathon · AICTE · SIH26261</div>
-          <h1 className="mt-4 max-w-xl font-display text-[30px] font-bold leading-[1.1] sm:text-[38px] 2xl:text-[44px]">Verify every approval document. Trust nothing until it is proven.</h1>
-          <p className="mt-4 hidden max-w-lg text-[15px] sm:block leading-relaxed text-white/80">SealCheck checks college submissions for forgery, expiry and collusion — and shows officers exactly where the evidence is, so decisions are fast, fair and defensible.</p>
+          <div className="mt-8 inline-flex lg:mt-10 items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold backdrop-blur"><Fingerprint className="h-3.5 w-3.5" />Smart India Hackathon · AICTE · SIH26262</div>
+          <h1 className="mt-4 max-w-xl font-display text-[30px] font-bold leading-[1.1] sm:text-[38px] 2xl:text-[44px]">Every AICTE approval, routed, tracked and verified.</h1>
+          <p className="mt-4 hidden max-w-lg text-[15px] sm:block leading-relaxed text-white/80">SealCheck automates the approval workflow (stage routing, EVC scheduling, undertakings, document validity, deadline alerts and escalation) and adds AI document verification that shows officers exactly where the evidence is.</p>
           <div className="mt-7 hidden max-w-xl gap-3 sm:grid sm:grid-cols-2">
             {feats.map((f) => (
               <div key={f.t} className="rounded-2xl border border-white/15 bg-white/[.07] p-4 backdrop-blur">

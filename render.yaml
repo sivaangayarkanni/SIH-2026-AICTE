@@ -1,3 +1,4 @@
+# SealCheck (SIH26262): AICTE approval workflow automation, compliance monitoring and alert management.
 # Render Blueprint for a public SealCheck DEMO (synthetic data, local demo logins). NOT a production deployment:
 # production needs ENV=production plus the operator inputs in docs/PRODUCTION.md (Postgres, OIDC, KMS, S3/WORM, Redis).
 # Deploy: Render dashboard -> New -> Blueprint -> pick this repo. No secrets live in this file.

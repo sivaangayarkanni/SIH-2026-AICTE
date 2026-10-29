@@ -1,4 +1,4 @@
-"""SealCheck API (FastAPI). Zero-trust AI compliance platform prototype for AICTE (SIH26261)."""
+"""SealCheck API (FastAPI). Integrated AICTE approval workflow automation, compliance monitoring and alert management prototype (SIH26262)."""
 import logging
 import json, os, shutil, tempfile, time
 from collections import defaultdict, deque
@@ -75,7 +75,7 @@ async def lifespan(_app):
 
 
 app = FastAPI(title="SealCheck API", version="1.0.0", lifespan=lifespan,
-              description="Zero-Trust AI Compliance Platform for AICTE — SIH26261 prototype. All demo data is synthetic.")
+              description="Integrated AICTE approval workflow automation, compliance monitoring and alert management — SIH26262 prototype. All demo data is synthetic.")
 from . import ops  # noqa: E402
 ops.fail_fast_if_insecure(IS_PROD)
 app.add_middleware(CORSMiddleware, allow_origins=[o for o in os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",") if o],

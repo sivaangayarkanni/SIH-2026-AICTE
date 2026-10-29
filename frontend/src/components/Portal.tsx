@@ -65,7 +65,7 @@ export function Masthead({ right }: { right?: ReactNode }) {
           <ShieldMark />
           <span className="leading-tight">
             <span className="block text-[20px] font-bold text-primary">SealCheck</span>
-            <span className="hidden text-[12px] font-semibold text-muted sm:block">Zero-trust document verification for approval processes · SIH 2026 prototype</span>
+            <span className="hidden text-[12px] font-semibold text-muted sm:block">Approval workflow automation, compliance monitoring and alert management · SIH26262 prototype</span>
           </span>
         </Link>
         <span className="ml-2 hidden rounded border border-[#b34000] px-2 py-0.5 text-[11px] font-bold uppercase text-[#b34000] dark:border-amber-300 dark:text-amber-300 md:inline">Prototype</span>
@@ -136,7 +136,7 @@ export function PortalFooter() {
     <footer className="mt-10 bg-primary text-[13px] text-white dark:bg-side">
       <Tricolour />
       <div className="mx-auto grid max-w-[1360px] gap-6 px-4 py-7 md:grid-cols-3 md:px-8">
-        <div className="flex items-start gap-3"><ShieldMark size={38} /><div><div className="font-bold">SealCheck</div><p className="mt-1 text-white/85">Zero-trust compliance verification · SIH26261</p></div></div>
+        <div className="flex items-start gap-3"><ShieldMark size={38} /><div><div className="font-bold">SealCheck</div><p className="mt-1 text-white/85">Approval workflow, compliance monitoring and alerts · SIH26262</p></div></div>
         <div><div className="font-bold">Accessibility</div><p className="mt-1 text-white/85">Text resize, high-contrast mode, keyboard navigation and a skip link are in the utility bar.</p></div>
         <div><div className="font-bold">Data</div><p className="mt-1 text-white/85"><FooterData /></p></div>
       </div>
