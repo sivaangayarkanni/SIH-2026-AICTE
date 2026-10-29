@@ -68,7 +68,7 @@ function CollegeDash() {
 }
 
 function StaffDash() {
-  const { user } = useAuth()
+  const { user, cfg } = useAuth()
   const [st, setSt] = useState<any>(null); const [q, setQ] = useState<any[] | null>(null); const [sec, setSec] = useState<any>(null); const [meta, setMeta] = useState<any>(null)
   useEffect(() => { api('/api/stats').then(setSt); api('/api/officer/queue').then(setQ); api('/api/security/overview').then(setSec); api('/api/meta').then(setMeta) }, [])
   const pie = st ? Object.entries(st.by_status).map(([k, v]) => ({ name: k, value: v as number })) : []
@@ -78,7 +78,7 @@ function StaffDash() {
     <>
       <PageHeader eyebrow={user!.role_label} title={`${greeting()}, ${user!.name}`}
         desc="Highest-risk, closest-deadline applications are at the top of your queue. Every finding links to on-page evidence."
-        actions={<div className="flex flex-wrap gap-2"><StartTourButton /><Link to="/queue" className="btn-primary">Open priority queue<ArrowRight className="h-4 w-4" /></Link></div>} />
+        actions={<div className="flex flex-wrap gap-2">{cfg?.demo_accounts && <StartTourButton />}<Link to="/queue" className="btn-primary">Open priority queue<ArrowRight className="h-4 w-4" /></Link></div>} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat icon={FileStack} label="Applications" value={st?.applications ?? '–'} hint={`${st?.documents ?? '–'} documents analysed`} />
         <Stat icon={Clock} label="Awaiting decision" value={st?.pending_review ?? '–'} hint="Submitted, no final decision" tone="amber" />

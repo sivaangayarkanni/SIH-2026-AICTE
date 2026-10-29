@@ -102,24 +102,29 @@ Full script with talking points: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 5. **2:15** Open **Security center**. Watch a 60-second job token expire, run the KMS demo, and verify the audit chain.
 6. **2:40** Sign in as **principal.gvce**. Use the readiness pre-check, the rejection helper and the offline queue (DevTools → offline → upload), and switch themes.
 
-## Public demo on Vercel
+## Production deployment on Vercel (https://sealcheck-nu.vercel.app)
 
-`vercel.json`, `api/index.py`, `requirements.txt` (slim) and `.python-version` deploy a public demo:
-the Vite build is served from the CDN and FastAPI runs as one Python function. The demo runs with
-`ENV=demo`, `AUTH_MODE=local`, synthetic data, and SQLite in `/tmp` seeded on cold start (about 10 s locally,
-up to about 40 s on Vercel). Jobs run inline (`QUEUE_BACKEND=inline`) and the sandbox uses the `process`
-fallback. Vision is `classic`. The ML models, Postgres, Redis/RQ, S3, Vault and SMTP are not installed.
-A yellow "Demo mode" bar says so (`SEALCHECK_DEMO_NOTICE`). The only secret is
-`SEALCHECK_JWT_SECRET`, set with `vercel env add`.
+`vercel.json`, `api/index.py`, `requirements.txt` and `.python-version` deploy the app. The Vite build is served from the CDN,
+and FastAPI runs as one Python function. **Nothing runs in demo mode:** `ENV=production`, there are no demo accounts or sample data,
+and the database starts empty apart from the signed rule bundle.
 
-**Known limit:** each serverless instance has its own SQLite copy. The seeded data is the same everywhere,
-but new uploads and decisions can vanish when a later request reaches another instance. A demo that keeps
-writes needs a shared database and object store (`DATABASE_URL` + `STORAGE_BACKEND=s3`) or the
-single-container Render Blueprint below.
+| Setting | Value |
+|---|---|
+| Database | free **Neon Postgres** (Vercel integration, `DATABASE_URL`). Migrations and seeding run under an advisory lock |
+| File storage | `STORAGE_BACKEND=db`: original and sanitised files go in Postgres `bytea`, insert-only and sha256-verified on every read, so every instance sees the same files |
+| Login | `AUTH_MODE=google`: Sign in with Google (Authorization Code + PKCE, server-verified ID token, verified email required), then a profile/onboarding form. Officer and admin access is approved by an administrator and can never be self-assigned. Setup: [docs/GOOGLE_LOGIN_SETUP.md](docs/GOOGLE_LOGIN_SETUP.md) |
+| Keys | `SEALCHECK_MASTER_KEY` → HKDF-derived sub-keys (identical on every instance); `SEALCHECK_JWT_SECRET` |
+| Jobs / sandbox | `QUEUE_BACKEND=inline` (each upload is analysed within its request); `process` sandbox (rlimits; Vercel has no bubblewrap), explicitly accepted with `SEALCHECK_ACCEPT_PROCESS_SANDBOX=1` |
+| Vision | `classic` (pHash + ORB) in the function. Deep models run in the separate [vision_service/](vision_service/) (Docker / Hugging Face Space); point `VISION_BACKEND=remote`, `VISION_REMOTE_URL` and `VISION_REMOTE_TOKEN` at it |
+
+Until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are added, the login page shows "Google sign-in is not configured".
+Operator tasks, such as creating an account by hand, issuing a short-lived token or deleting a user, use `scripts/admin.py`
+(every action is audit-logged; WORM blobs and audit entries are never deleted).
 
 ```bash
-vercel link --project sealcheck
-vercel env add SEALCHECK_JWT_SECRET production --sensitive
+vercel env add GOOGLE_CLIENT_ID production
+vercel env add GOOGLE_CLIENT_SECRET production --sensitive
+vercel env add SEALCHECK_BOOTSTRAP_ADMIN_EMAIL production   # your Google address -> first administrator
 vercel deploy --prod
 ```
 
@@ -170,18 +175,20 @@ Other themes (AICTE Blue, Emerald, Indigo, Saffron) and dark mode are still unde
 | OCSP / CRL revocation, issuer-registry connectors | host-side client with cache and circuit breaker | **Mock-tested only**; no real responder or registry has been contacted |
 | Sandbox | bubblewrap namespaces + seccomp + rlimits, with no network | **Real, tested here** (including escape tests). The Docker/gVisor backend is argv-tested only |
 | Database | SQLite (dev) / PostgreSQL 16 + pgvector | **Both tested** (full suite runs on each) |
-| Login | local demo login / OIDC Authorization Code + PKCE + MFA | OIDC **mock-tested only** (mock IdP, not Keycloak) |
+| Login | Google sign-in (production) / local demo login (`ENV=development` only) / generic OIDC + MFA | OIDC **mock-tested only** (mock IdP, not Keycloak) |
 | KMS | soft KMS (dev), AWS KMS, Vault Transit, PKCS#11 | soft real; AWS moto-tested; Vault mock-tested; **PKCS#11 untested** |
 | WORM storage | chmod 0444 (dev), S3 Object Lock COMPLIANCE | fs real; **S3 moto-tested only** |
 | Job queue | thread (dev), PG `SKIP LOCKED`, RQ/Redis | thread and PG real; RQ fakeredis-tested only |
-| Photo vision | pHash + ORB (default); DINOv2 + RT-DETR + LightGlue (`VISION_BACKEND=models`) | Both real; models **run on synthetic photos only, thresholds uncalibrated** (and RT-DETR produced a "microwave" false positive) |
+| Photo vision | pHash + ORB (default); DINOv2 + RT-DETR + LightGlue (`VISION_BACKEND=models`, or `remote` via `vision_service/`) | Both real. Thresholds were **calibrated on a synthetic set only** ([ml/eval/REPORT.md](ml/eval/REPORT.md): held-out synthetic P 1.00 / R 0.67 classic, P 0.98 / R 0.70 models; mirrored reuse is mostly missed). RT-DETR is COCO-only and was not evaluated on lab equipment |
+| Google sign-in | OIDC code + PKCE against Google, ID-token signature and claims checked server-side | Code **mock-IdP-tested** end to end; live only once the user adds the Google OAuth client |
+| Production hosting | Vercel + Neon Postgres, blobs in Postgres | **Live**, verified with a temporary account (since deleted) |
 | LLM wording | off by default; OpenAI-compatible / Anthropic / Ollama | **Mock-tested only**; guarded so it cannot change a status |
 | Alerts | in-app, SMTP, SMS, webhook, Slack, SIEM | in-app and SIEM-to-file real; SMTP tested against a local aiosmtpd; the rest are mock-HTTP-tested |
 | Docker Compose / Kubernetes / CI | files provided | **Not run** (no Docker on the build box); syntax-checked only |
 | Voice assistant | browser Web Speech API | depends on the browser |
 | Sample documents and photos | generated by `seed/generate_samples.py` | **Synthetic** |
 
-No accuracy or throughput numbers are claimed, because nothing has been benchmarked on real data. Each document shows its own measured analysis time.
+No real-world accuracy or throughput numbers are claimed, because nothing has been benchmarked on real data; the only figures are the clearly labelled synthetic ones in ml/eval/REPORT.md. Each document shows its own measured analysis time.
 
 ## Security model
 

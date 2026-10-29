@@ -4,6 +4,8 @@ import { useAuth } from './lib/auth'
 import { Layout } from './components/Layout'
 import Login from './pages/Login'
 import AuthCallback from './pages/AuthCallback'
+import GoogleCallback from './pages/GoogleCallback'
+import Onboarding from './pages/Onboarding'
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Applications = lazy(() => import('./pages/Applications'))
 const NewApplication = lazy(() => import('./pages/NewApplication'))
@@ -25,6 +27,7 @@ function Guard({ children, roles }: { children: ReactNode; roles?: string[] }) {
   const { user, loading } = useAuth(); const loc = useLocation()
   if (loading) return <div className="flex h-full items-center justify-center"><div className="animate-pulse"><Logo size={48} /></div></div>
   if (!user) return <Navigate to="/login" state={{ from: loc.pathname }} replace />
+  if (user.role === 'pending') return <Navigate to="/onboarding" replace />
   if (roles && !roles.includes(user.role)) return <Layout><div className="card card-pad text-center"><h2 className="font-display text-xl font-bold">Not available for your role</h2><p className="mt-1 text-sm text-muted">Role-based access control (RBAC) restricts this page to: {roles.join(', ')}.</p></div></Layout>
   return <Layout><Suspense fallback={<div className="space-y-3"><div className="skeleton h-8 w-64" /><div className="skeleton h-40 w-full" /></div>}>{children}</Suspense></Layout>
 }
@@ -35,6 +38,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/auth/google" element={<GoogleCallback />} />
+      <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/" element={<Guard><Dashboard /></Guard>} />
       <Route path="/applications" element={<Guard><Applications /></Guard>} />
       <Route path="/applications/new" element={<Guard roles={['college']}><NewApplication /></Guard>} />

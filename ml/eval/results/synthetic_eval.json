@@ -1,0 +1,669 @@
+{
+  "warning": "SYNTHETIC DATA ONLY. Not a measure of real-world accuracy.",
+  "generated_at": "2026-10-29 17:10 IST",
+  "photo_classic": {
+    "method": "pHash Hamming + ORB/RANSAC homography inliers",
+    "current_thresholds": {
+      "phash_dup": 8,
+      "orb_inliers": 40,
+      "orb_gate_phash": 22
+    },
+    "current": {
+      "cal": {
+        "precision": 0.794,
+        "recall": 0.45,
+        "f1": 0.574,
+        "tp": 27,
+        "fp": 7,
+        "fn": 33,
+        "tn": 73,
+        "n": 140,
+        "by_kind": {
+          "reuse (crop/scale/rotate/recompress)": {
+            "precision": 1.0,
+            "recall": 0.675,
+            "f1": 0.806,
+            "tp": 27,
+            "fp": 0,
+            "fn": 13,
+            "tn": 0,
+            "n": 40
+          },
+          "reuse, mirrored": {
+            "precision": 1.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 20,
+            "tn": 0,
+            "n": 20
+          },
+          "sibling room (same plan, different lab)": {
+            "precision": 0.0,
+            "recall": 1.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 6,
+            "fn": 0,
+            "tn": 14,
+            "n": 20
+          },
+          "unrelated room": {
+            "precision": 0.0,
+            "recall": 1.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 1,
+            "fn": 0,
+            "tn": 59,
+            "n": 60
+          }
+        }
+      },
+      "test": {
+        "precision": 0.857,
+        "recall": 0.4,
+        "f1": 0.545,
+        "tp": 24,
+        "fp": 4,
+        "fn": 36,
+        "tn": 76,
+        "n": 140,
+        "by_kind": {
+          "reuse (crop/scale/rotate/recompress)": {
+            "precision": 1.0,
+            "recall": 0.6,
+            "f1": 0.75,
+            "tp": 24,
+            "fp": 0,
+            "fn": 16,
+            "tn": 0,
+            "n": 40
+          },
+          "reuse, mirrored": {
+            "precision": 1.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 20,
+            "tn": 0,
+            "n": 20
+          },
+          "sibling room (same plan, different lab)": {
+            "precision": 0.0,
+            "recall": 1.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 4,
+            "fn": 0,
+            "tn": 16,
+            "n": 20
+          },
+          "unrelated room": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 60,
+            "n": 60
+          }
+        }
+      }
+    },
+    "calibrated_thresholds": {
+      "phash_dup": 2,
+      "orb_inliers": 15,
+      "orb_gate_phash": 64
+    },
+    "calibrated": {
+      "cal": {
+        "precision": 0.976,
+        "recall": 0.667,
+        "f1": 0.792,
+        "tp": 40,
+        "fp": 1,
+        "fn": 20,
+        "tn": 79,
+        "n": 140,
+        "by_kind": {
+          "reuse (crop/scale/rotate/recompress)": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 40,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 40
+          },
+          "reuse, mirrored": {
+            "precision": 1.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 20,
+            "tn": 0,
+            "n": 20
+          },
+          "sibling room (same plan, different lab)": {
+            "precision": 0.0,
+            "recall": 1.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 1,
+            "fn": 0,
+            "tn": 19,
+            "n": 20
+          },
+          "unrelated room": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 60,
+            "n": 60
+          }
+        }
+      },
+      "test": {
+        "precision": 1.0,
+        "recall": 0.667,
+        "f1": 0.8,
+        "tp": 40,
+        "fp": 0,
+        "fn": 20,
+        "tn": 80,
+        "n": 140,
+        "by_kind": {
+          "reuse (crop/scale/rotate/recompress)": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 40,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 40
+          },
+          "reuse, mirrored": {
+            "precision": 1.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 20,
+            "tn": 0,
+            "n": 20
+          },
+          "sibling room (same plan, different lab)": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 20,
+            "n": 20
+          },
+          "unrelated room": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 60,
+            "n": 60
+          }
+        }
+      }
+    }
+  },
+  "photo_models": {
+    "method": "DINOv2-small cosine AND DISK+LightGlue MAGSAC inliers",
+    "current_thresholds": {
+      "dup_cosine": 0.9,
+      "dup_inliers": 100
+    },
+    "current": {
+      "cal": {
+        "precision": 0.812,
+        "recall": 0.217,
+        "f1": 0.342,
+        "tp": 13,
+        "fp": 3,
+        "fn": 47,
+        "tn": 77,
+        "n": 140,
+        "by_kind": {
+          "reuse (crop/scale/rotate/recompress)": {
+            "precision": 1.0,
+            "recall": 0.275,
+            "f1": 0.431,
+            "tp": 11,
+            "fp": 0,
+            "fn": 29,
+            "tn": 0,
+            "n": 40
+          },
+          "reuse, mirrored": {
+            "precision": 1.0,
+            "recall": 0.1,
+            "f1": 0.182,
+            "tp": 2,
+            "fp": 0,
+            "fn": 18,
+            "tn": 0,
+            "n": 20
+          },
+          "sibling room (same plan, different lab)": {
+            "precision": 0.0,
+            "recall": 1.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 3,
+            "fn": 0,
+            "tn": 17,
+            "n": 20
+          },
+          "unrelated room": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 60,
+            "n": 60
+          }
+        }
+      },
+      "test": {
+        "precision": 0.875,
+        "recall": 0.233,
+        "f1": 0.368,
+        "tp": 14,
+        "fp": 2,
+        "fn": 46,
+        "tn": 78,
+        "n": 140,
+        "by_kind": {
+          "reuse (crop/scale/rotate/recompress)": {
+            "precision": 1.0,
+            "recall": 0.325,
+            "f1": 0.491,
+            "tp": 13,
+            "fp": 0,
+            "fn": 27,
+            "tn": 0,
+            "n": 40
+          },
+          "reuse, mirrored": {
+            "precision": 1.0,
+            "recall": 0.05,
+            "f1": 0.095,
+            "tp": 1,
+            "fp": 0,
+            "fn": 19,
+            "tn": 0,
+            "n": 20
+          },
+          "sibling room (same plan, different lab)": {
+            "precision": 0.0,
+            "recall": 1.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 2,
+            "fn": 0,
+            "tn": 18,
+            "n": 20
+          },
+          "unrelated room": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 60,
+            "n": 60
+          }
+        }
+      }
+    },
+    "calibrated_thresholds": {
+      "dup_cosine": 0.7,
+      "dup_inliers": 150
+    },
+    "calibrated": {
+      "cal": {
+        "precision": 0.978,
+        "recall": 0.733,
+        "f1": 0.838,
+        "tp": 44,
+        "fp": 1,
+        "fn": 16,
+        "tn": 79,
+        "n": 140,
+        "by_kind": {
+          "reuse (crop/scale/rotate/recompress)": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 40,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 40
+          },
+          "reuse, mirrored": {
+            "precision": 1.0,
+            "recall": 0.2,
+            "f1": 0.333,
+            "tp": 4,
+            "fp": 0,
+            "fn": 16,
+            "tn": 0,
+            "n": 20
+          },
+          "sibling room (same plan, different lab)": {
+            "precision": 0.0,
+            "recall": 1.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 1,
+            "fn": 0,
+            "tn": 19,
+            "n": 20
+          },
+          "unrelated room": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 60,
+            "n": 60
+          }
+        }
+      },
+      "test": {
+        "precision": 0.977,
+        "recall": 0.7,
+        "f1": 0.816,
+        "tp": 42,
+        "fp": 1,
+        "fn": 18,
+        "tn": 79,
+        "n": 140,
+        "by_kind": {
+          "reuse (crop/scale/rotate/recompress)": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 40,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 40
+          },
+          "reuse, mirrored": {
+            "precision": 1.0,
+            "recall": 0.1,
+            "f1": 0.182,
+            "tp": 2,
+            "fp": 0,
+            "fn": 18,
+            "tn": 0,
+            "n": 20
+          },
+          "sibling room (same plan, different lab)": {
+            "precision": 0.0,
+            "recall": 1.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 1,
+            "fn": 0,
+            "tn": 19,
+            "n": 20
+          },
+          "unrelated room": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 60,
+            "n": 60
+          }
+        }
+      }
+    }
+  },
+  "documents": {
+    "method": "CDR + PDF forensics (hidden text, white-box overlay, DSC ByteRange/coverage); 'detected' = any forgery finding",
+    "result": {
+      "cal": {
+        "precision": 0.833,
+        "recall": 1.0,
+        "f1": 0.909,
+        "tp": 75,
+        "fp": 15,
+        "fn": 0,
+        "tn": 30,
+        "n": 120,
+        "by_kind": {
+          "clean, decorative white box (covers nothing)": {
+            "precision": 0.0,
+            "recall": 1.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 15,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          },
+          "clean, signed": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 15,
+            "n": 15
+          },
+          "clean, unsigned": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 15,
+            "n": 15
+          },
+          "edited after signing": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 15,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          },
+          "hidden text, tiny 1pt black": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 15,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          },
+          "hidden white text": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 15,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          },
+          "overlay in near-white (#FAFAFA)": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 15,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          },
+          "white-box overlay over text": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 15,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          }
+        }
+      },
+      "test": {
+        "precision": 0.833,
+        "recall": 1.0,
+        "f1": 0.909,
+        "tp": 75,
+        "fp": 15,
+        "fn": 0,
+        "tn": 30,
+        "n": 120,
+        "by_kind": {
+          "clean, decorative white box (covers nothing)": {
+            "precision": 0.0,
+            "recall": 1.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 15,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          },
+          "clean, signed": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 15,
+            "n": 15
+          },
+          "clean, unsigned": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 0,
+            "tn": 15,
+            "n": 15
+          },
+          "edited after signing": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 15,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          },
+          "hidden text, tiny 1pt black": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 15,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          },
+          "hidden white text": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 15,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          },
+          "overlay in near-white (#FAFAFA)": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 15,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          },
+          "white-box overlay over text": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 15,
+            "fp": 0,
+            "fn": 0,
+            "tn": 0,
+            "n": 15
+          }
+        }
+      }
+    },
+    "rules_fired_by_kind": {
+      "clean, decorative white box (covers nothing)": [
+        "F-OVL-01"
+      ],
+      "clean, signed": [],
+      "clean, unsigned": [],
+      "edited after signing": [
+        "F-DSC-02"
+      ],
+      "hidden text, tiny 1pt black": [
+        "F-HID-01"
+      ],
+      "hidden white text": [
+        "F-HID-01"
+      ],
+      "overlay in near-white (#FAFAFA)": [
+        "F-OVL-01"
+      ],
+      "white-box overlay over text": [
+        "F-OVL-01"
+      ]
+    }
+  },
+  "sizes": {
+    "photo_pairs": 280,
+    "documents": 240,
+    "scenes": 40
+  },
+  "runtime_s": 824.6
+}

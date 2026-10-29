@@ -53,3 +53,34 @@ def test_integrity_job_detects_tamper(tmp_path):
             def verify(self, key, sha): return False, "hash mismatch"
         res = storage.integrity_check(s, Bad(tmp_path))
         assert len(res["failed"]) == res["checked"]
+
+
+def test_db_worm_shared_across_instances(tmp_path, monkeypatch):
+    """STORAGE_BACKEND=db: a second instance with an empty local cache rebuilds files from the shared database."""
+    from app.db import SessionLocal, Blob, init_db, engine
+    from app.config import SANITIZED_DIR
+    from sqlalchemy import text
+    init_db()
+    (tmp_path / "orig").mkdir()
+    st = storage.DbWorm(tmp_path / "orig")
+    monkeypatch.setattr(storage, "_store", st)
+    data = os.urandom(64)
+    sha = hashlib.sha256(data).hexdigest()
+    p = Path(st.put(data, sha, "pdf"))
+    os.chmod(p, 0o644); p.unlink()                      # "another instance": nothing on local disk
+    assert st.verify(p.name, sha) == (True, "ok (db)")
+    san = SANITIZED_DIR / f"dbworm_{sha[:8]}.pdf"
+    san.write_bytes(b"sanitized " + data)
+    storage.save_artifact(str(san)); san.unlink()
+    assert storage.materialize(str(san)) == str(san) and san.read_bytes() == b"sanitized " + data
+    key = storage.blob_key(str(san))
+    assert key.startswith("sanitized/")
+    if engine.dialect.name == "postgresql":              # insert-only is enforced by a trigger
+        with pytest.raises(Exception):
+            with engine.begin() as c:
+                c.execute(text("update blobs set data = 'x' where key = :k"), {"k": key})
+    else:                                                 # SQLite has no trigger: tampering is still detected
+        with SessionLocal() as s:
+            s.get(Blob, key).data = b"tampered"; s.commit()
+        with pytest.raises(RuntimeError):
+            st.fetch(key)

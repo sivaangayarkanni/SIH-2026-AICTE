@@ -1,3 +1,4 @@
+import os
 """4C · Infrastructure / Lab Photo Inspector (local equivalent of the GPU pipeline).
 EXIF geotag extraction, perceptual hash + OpenCV ORB keypoint matching for reused photos, and simple
 room-structure cues (straight-line/edge statistics). Production plugs DINOv2/LightGlue + a permissive-licence
@@ -112,14 +113,21 @@ def haversine_km(a, b):
     return 2 * R * math.asin(math.sqrt(h))
 
 
+# Thresholds calibrated on the SYNTHETIC eval set (ml/eval/REPORT.md); held-out synthetic precision 1.00 / recall 0.67
+# vs 0.86 / 0.40 for the previous hand-set values (8, 40, 22). Not validated on real lab photos; override via env.
+PHASH_DUP = int(os.getenv("PHOTO_PHASH_DUP", "2"))
+ORB_DUP_INLIERS = int(os.getenv("PHOTO_ORB_INLIERS", "15"))
+ORB_GATE_PHASH = int(os.getenv("PHOTO_ORB_GATE_PHASH", "64"))
+
+
 def analyze_photo(path: str, candidates: list[dict]) -> dict:
     ph = phash(path)
     matches = []
     for c in candidates:
         try:
             d = phash_distance(ph, c["phash"]) if c.get("phash") else 64
-            orb = orb_match(path, c["path"]) if d <= 22 else {"good": 0, "inliers": 0, "inlier_ratio": 0}
-            dup = d <= 8 or orb["inliers"] >= 40
+            orb = orb_match(path, c["path"]) if d <= ORB_GATE_PHASH else {"good": 0, "inliers": 0, "inlier_ratio": 0}
+            dup = d <= PHASH_DUP or (d <= ORB_GATE_PHASH and orb["inliers"] >= ORB_DUP_INLIERS)
             if dup or d <= 14:
                 matches.append({"document_id": c["document_id"], "college_id": c["college_id"], "phash_distance": d,
                                 "orb": orb, "duplicate": dup})

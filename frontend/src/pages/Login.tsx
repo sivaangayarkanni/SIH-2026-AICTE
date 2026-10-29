@@ -19,8 +19,8 @@ export default function Login() {
   const { theme, setTheme } = useTheme()
   const [accounts, setAccounts] = useState<any[]>([]); const [pw, setPw] = useState('Demo@2026')
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [busy, setBusy] = useState<string | null>(null); const [err, setErr] = useState('')
-  const [reason] = useState(() => { const r = sessionStorage.getItem('sealcheck.logout_reason'); sessionStorage.removeItem('sealcheck.logout_reason'); return r })
-  useEffect(() => { if (cfg && !cfg.demo_accounts) return; api('/api/auth/demo-accounts').then((r) => { setAccounts(r.accounts); setPw(r.password) }).catch(() => {}) }, [cfg])
+  const [reason] = useState(() => { const r = sessionStorage.getItem('sealcheck.logout_reason'); sessionStorage.removeItem('sealcheck.logout_reason'); return r || new URLSearchParams(window.location.search).get('error') })
+  useEffect(() => { if (!cfg || !cfg.demo_accounts) return; api('/api/auth/demo-accounts').then((r) => { setAccounts(r.accounts); setPw(r.password) }).catch(() => {}) }, [cfg])
   useEffect(() => { if (user) nav(loc.state?.from || '/', { replace: true }) }, [user])
   const go = async (e: string, p: string) => {
     setBusy(e); setErr('')
@@ -36,9 +36,17 @@ export default function Login() {
   const panel = (
         <div className="w-full max-w-[540px] animate-fadeUp">
           <h2 className="font-display text-3xl font-bold">{portal ? 'Sign in to the SealCheck prototype' : 'Sign in'}</h2>
-          {portal && <p role="note" className="mt-2 rounded border-l-4 border-[#b34000] bg-accent-soft px-3 py-2 text-[13px] text-ink">This is the demo sign-in for a hackathon prototype. It is <b>not</b> the AICTE portal login. Do not enter real AICTE or government credentials.</p>}
+          {portal && <p role="note" className="mt-2 rounded border-l-4 border-[#b34000] bg-accent-soft px-3 py-2 text-[13px] text-ink">This is the sign-in for a hackathon prototype. It is <b>not</b> the AICTE portal login. Do not enter AICTE or government portal passwords here.</p>}
           {reason && <div role="status" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">{reason}</div>}
-          {cfg?.mode === 'oidc' ? <>
+          {cfg?.mode === 'google' ? <>
+            <p className="mt-1 text-sm text-muted">Sign in with your Google account. First-time users fill in a short profile; AICTE officer access is approved by an administrator.</p>
+            {cfg.google?.enabled
+              ? <a className="btn-primary mt-6 flex w-full justify-center py-3" data-testid="google-login" href={`/api/auth/google/start?return_to=${encodeURIComponent(loc.state?.from || '/')}`} onClick={() => setBusy('google')}>
+                  {busy === 'google' ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleG />}Continue with Google</a>
+              : <><button className="btn-primary mt-6 w-full py-3 opacity-60" data-testid="google-login" disabled><GoogleG />Continue with Google</button>
+                  <div role="status" data-testid="google-not-configured" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">Google sign-in is not configured on this deployment yet. The administrator needs to add the Google OAuth client ID and secret.</div></>}
+            <p className="mt-3 text-xs text-muted">OpenID Connect · Authorization Code + PKCE · verified Google email required</p>
+          </> : cfg?.mode === 'oidc' ? <>
             <p className="mt-1 text-sm text-muted">Use your AICTE single sign-on account. Officers are asked for a one-time code (TOTP).</p>
             <button className="btn-primary mt-6 w-full py-3" data-testid="sso-login" disabled={!!busy} onClick={async () => { setBusy('sso'); setErr(''); try { await sso(loc.state?.from || '/') } catch (x: any) { setErr(x.message); setBusy(null) } }}>
               {busy === 'sso' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Sign in with single sign-on</button>
@@ -79,7 +87,7 @@ export default function Login() {
                 className={`h-7 w-7 rounded-full ring-offset-2 ring-offset-surface transition ${theme === t.id ? 'ring-2 ring-primary' : 'hover:scale-110'}`} style={{ background: `linear-gradient(135deg, ${t.swatch[0]} 55%, ${t.swatch[1]} 55%)` }} />
             ))}</div>
           </div>
-          <p className="mt-4 text-center text-[11px] text-muted">Prototype with synthetic demo data. All demo accounts use the password <span className="kbd">{pw}</span>.</p>
+          {cfg?.demo_accounts && <p className="mt-4 text-center text-[11px] text-muted">Development build with synthetic demo data. All demo accounts use the password <span className="kbd">{pw}</span>.</p>}
         </div>
   )
   if (portal) return (
@@ -95,7 +103,7 @@ export default function Login() {
             <ul className="mt-5 grid gap-3 sm:grid-cols-2">
               {feats.map((f) => <li key={f.t} className="flex gap-3 rounded border border-line bg-surface-2 p-3"><f.i className="mt-0.5 h-5 w-5 shrink-0 text-[color:var(--link)]" /><span><span className="block text-sm font-bold">{f.t}</span><span className="block text-[13px] text-muted">{f.d}</span></span></li>)}
             </ul>
-            <div className="mt-5 rounded px-3 py-2 text-[13px] font-semibold text-[#111]" style={{ background: 'var(--amber)' }}>Smart India Hackathon 2026 · Problem statement SIH26261 · synthetic demo data only</div>
+            <div className="mt-5 rounded px-3 py-2 text-[13px] font-semibold text-[#111]" style={{ background: 'var(--amber)' }}>Smart India Hackathon 2026 · Problem statement SIH26261{cfg?.demo_accounts ? ' · synthetic demo data only' : ' · prototype, not an official AICTE system'}</div>
           </div>
         </section>
         <section className="card p-6">{panel}</section>
@@ -128,6 +136,10 @@ export default function Login() {
       </section>
     </div>
   )
+}
+
+function GoogleG() {
+  return <svg aria-hidden width="18" height="18" viewBox="0 0 48 48" className="rounded-full bg-white p-[2px]"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.5 30.2 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.8 6C12.3 13.4 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17z"/><path fill="#FBBC05" d="M10.4 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.9-4.7l-7.8-6A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.8-6z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.7-3.9-13.6-9.6l-7.8 6C6.6 42.6 14.6 48 24 48z"/></svg>
 }
 
 function HeroArt() {

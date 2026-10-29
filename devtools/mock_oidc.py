@@ -21,6 +21,13 @@ USERS = {
 }
 
 
+OPEN_DOMAIN = "@gmail.test"  # any <name>@gmail.test signs in with password "google": stands in for Google accounts
+
+
+def _open_user(email):
+    return {"name": email.split("@")[0].replace(".", " ").title(), "roles": [], "totp": False}
+
+
 def totp(secret_b32, t=None, step=30, digits=6):
     key = base64.b32decode(secret_b32)
     c = int((t or time.time()) // step)
@@ -46,7 +53,7 @@ def create_app(issuer: str, access_ttl=300):
         return {"kty": "RSA", "kid": st["kid"], "use": "sig", "alg": "RS256", "n": b(n.n), "e": b(n.e)}
 
     def mint(email, client_id, nonce=None, mfa=False):
-        u = USERS[email]; now = int(time.time())
+        u = USERS.get(email) or _open_user(email); now = int(time.time())
         base = {"iss": issuer, "sub": hashlib.sha256(email.encode()).hexdigest()[:24], "iat": now, "email": email,
                 "email_verified": True, "name": u["name"], "azp": client_id}
         if u.get("college_code"):
@@ -101,10 +108,10 @@ button{{margin-top:18px;width:100%;padding:10px;border:0;border-radius:8px;backg
     @app.post("/authorize")
     def authorize_post(client_id: str = Form(), redirect_uri: str = Form(), code_challenge: str = Form(), state: str = Form(""),
                        nonce: str = Form(""), email: str = Form(), password: str = Form(), otp: str = Form("")):
-        u = USERS.get(email)
+        u = USERS.get(email) or (_open_user(email) if email.endswith(OPEN_DOMAIN) and password == "google" else None)
         q = dict(response_type="code", client_id=client_id, redirect_uri=redirect_uri, code_challenge=code_challenge,
                  code_challenge_method="S256", state=state, nonce=nonce)
-        if not u or password != "Demo@2026":
+        if not u or (email in USERS and password != "Demo@2026"):
             return RedirectResponse(f"{issuer}/authorize?{urlencode({**q, 'error': 'Invalid credentials'})}", 303)
         mfa = False
         if u["totp"]:

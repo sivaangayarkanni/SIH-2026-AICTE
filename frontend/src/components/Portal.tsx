@@ -138,7 +138,7 @@ export function PortalFooter() {
       <div className="mx-auto grid max-w-[1360px] gap-6 px-4 py-7 md:grid-cols-3 md:px-8">
         <div className="flex items-start gap-3"><ShieldMark size={38} /><div><div className="font-bold">SealCheck</div><p className="mt-1 text-white/85">Zero-trust compliance verification · SIH26261</p></div></div>
         <div><div className="font-bold">Accessibility</div><p className="mt-1 text-white/85">Text resize, high-contrast mode, keyboard navigation and a skip link are in the utility bar.</p></div>
-        <div><div className="font-bold">Data</div><p className="mt-1 text-white/85">All colleges, people and documents shown are synthetic demo data.</p></div>
+        <div><div className="font-bold">Data</div><p className="mt-1 text-white/85"><FooterData /></p></div>
       </div>
       <div className="border-t border-white/15">
         <div className="mx-auto flex max-w-[1360px] flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-[12px] md:px-8">
@@ -159,4 +159,9 @@ export function DemoNotice() {
       <strong>Demo mode:</strong> {cfg.demo_notice}
     </div>
   )
+}
+
+function FooterData() {
+  const { cfg } = useAuth()
+  return <>{cfg?.demo_accounts ? 'All colleges, people and documents shown are synthetic demo data.' : 'Data is entered by signed-in institutions and officers and stored in this deployment\'s database.'}</>
 }

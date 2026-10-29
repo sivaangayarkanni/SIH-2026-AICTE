@@ -44,8 +44,18 @@ for d in (DATA_DIR, ORIGINALS_DIR, SANITIZED_DIR, EVIDENCE_DIR, KEYS_DIR, JOBS_D
 
 def secret(name: str, nbytes: int = 32) -> bytes:
     """Load (or create once) a local secret file under data/keys. Production: fetched from KMS/HSM."""
+    if os.environ.get("SEALCHECK_MASTER_KEY"):
+        return derive_key(name, nbytes)
     p = KEYS_DIR / name
     if not p.exists():
         p.write_bytes(os.urandom(nbytes))
         os.chmod(p, 0o600)
     return p.read_bytes()
+
+
+def derive_key(label: str, nbytes: int = 32) -> bytes:
+    """HKDF-SHA256 sub-key of SEALCHECK_MASTER_KEY, so every serverless instance derives identical keys."""
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    mk = os.environ["SEALCHECK_MASTER_KEY"].encode()
+    return HKDF(algorithm=hashes.SHA256(), length=nbytes, salt=b"sealcheck-v1", info=label.encode()).derive(mk)

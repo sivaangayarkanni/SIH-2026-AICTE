@@ -24,7 +24,8 @@ def store_original(data: bytes, sha: str, ext: str) -> str:
 
 
 def read_original_verified(v: DocumentVersion) -> bytes:
-    data = Path(v.stored_path).read_bytes()
+    from .storage import materialize
+    data = Path(materialize(v.stored_path)).read_bytes()
     if hashlib.sha256(data).hexdigest() != v.sha256:
         raise RuntimeError("WORM integrity check failed: original file hash changed")
     return data
@@ -60,6 +61,9 @@ def run_job(job_id: int, token_ttl: int | None = None):
         san = SANITIZED_DIR / f"doc{doc.id}_v{ver.version_no}.{ext}"
         cands = [{"document_id": p.document_id, "college_id": p.college_id, "phash": p.phash, "path": p.path}
                  for p in s.query(PhotoIndex).filter(PhotoIndex.college_id != app.college_id).all()]
+        from .storage import materialize, save_artifact
+        for c in cands:
+            materialize(c.get("path"))
         spec = {"token": token, "token_key": job_token_key().hex(), "job_id": job.id, "document_id": doc.id,
                 "file_path": ver.stored_path, "sanitized_path": str(JOBS_DIR / f"job{job.id}" / san.name), "mime": doc.mime, "doc_type": doc.doc_type,
                 "trust_dir": str(TRUST_DIR), "backend_dir": str(BACKEND_DIR), "candidates": cands,
@@ -114,6 +118,7 @@ def run_job(job_id: int, token_ttl: int | None = None):
         if out_file.exists():
             import shutil
             shutil.copyfile(out_file, san)
+            save_artifact(str(san))
         s.query(DocumentVersion).filter_by(id=ver.id).first()
         # persist sanitized path (immutable row => store as metadata instead)
         s.add(DocumentMetadata(document_id=doc.id, key="sanitized_path", value=str(san)))
@@ -199,7 +204,7 @@ def _mask(text, pii):
 def model_photo_findings(s, photo_res, san_path, college_id):
     from .vision import client as vc
     from .db import similar_photos
-    if vc.BACKEND != "models":
+    if vc.BACKEND not in ("models", "remote"):
         photo_res["vision_backend"] = "classic"
         return []
     def cands(emb):
@@ -208,12 +213,12 @@ def model_photo_findings(s, photo_res, san_path, college_id):
     try:
         r = vc.analyze_with_models(san_path, cands)
     except Exception as e:  # noqa: BLE001 - fall back to classic, say so
-        photo_res["vision_backend"] = "classic (models failed)"
+        photo_res["vision_backend"] = f"classic ({vc.BACKEND} failed)"
         photo_res["vision_error"] = str(e)[:300]
         return [{"module": "4C", "rule_id": "I-VIS-00", "clause": "Ops · Vision backend", "outcome": "warn", "severity": "low",
                  "title": "Model vision unavailable — classic matcher used",
-                 "detail": f"VISION_BACKEND=models failed ({type(e).__name__}); pHash+ORB results shown instead."}]
-    photo_res["vision_backend"] = "models"
+                 "detail": f"VISION_BACKEND={vc.BACKEND} failed ({type(e).__name__}); pHash+ORB results shown instead."}]
+    photo_res["vision_backend"] = vc.BACKEND
     photo_res["models"] = r
     out = []
     for m in r["matches"]:

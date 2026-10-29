@@ -1,5 +1,6 @@
-# Slim runtime for the Vercel demo (serverless). Full set: backend/requirements.txt.
-# Left out on purpose: torch/transformers/kornia/timm (VISION_BACKEND=models), Postgres, Redis/RQ, S3, Vault, PKCS#11, SMTP.
+# Vercel production runtime (serverless). Full set: backend/requirements.txt.
+# Neon Postgres via psycopg; blobs stored in Postgres (STORAGE_BACKEND=db).
+# Left out on purpose: torch/transformers/kornia/timm (run them in vision_service/ and set VISION_BACKEND=remote), Redis/RQ, S3, Vault, PKCS#11, SMTP.
 fastapi==0.162.0
 SQLAlchemy==2.1.6
 pydantic==2.14.1
@@ -20,3 +21,5 @@ python-docx==1.2.0
 pytesseract==0.3.13
 httpx==0.28.1
 prometheus_client==0.26.0
+psycopg[binary]==3.3.6
+pgvector==0.5.1

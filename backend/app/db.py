@@ -5,9 +5,9 @@ Production: PostgreSQL 15+ with pgvector (DATABASE_URL=postgresql+psycopg://...)
 Schema: separate PII vault, immutable document versions, append-only hash-chained audit log (DB trigger on
 Postgres), job queue, evidence store, photo/document embeddings (pgvector HNSW indexes on Postgres)."""
 from datetime import datetime, timezone
-from sqlalchemy import (create_engine, Column, Integer, String, Text, DateTime, Float, ForeignKey, Boolean, JSON, event,
+from sqlalchemy import (create_engine, Column, Integer, String, Text, DateTime, Float, ForeignKey, Boolean, JSON, event, LargeBinary,
                         CheckConstraint, Index, UniqueConstraint, text)
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship, backref
 from sqlalchemy.types import TypeDecorator
 from .config import DB_URL, DB_POOL_SIZE, DB_MAX_OVERFLOW, DB_POOL_TIMEOUT_S, DB_STATEMENT_TIMEOUT_MS
 
@@ -17,8 +17,15 @@ EMBED_DIM = 384  # DINOv2-small CLS dim; text embeddings use the same width
 if IS_PG:
     engine = create_engine(DB_URL, pool_size=DB_POOL_SIZE, max_overflow=DB_MAX_OVERFLOW, pool_timeout=DB_POOL_TIMEOUT_S,
                            pool_pre_ping=True, pool_recycle=1800,
-                           connect_args={"options": f"-c statement_timeout={DB_STATEMENT_TIMEOUT_MS}",
-                                         "application_name": "sealcheck"})
+                           connect_args={"application_name": "sealcheck"})
+
+    @event.listens_for(engine, "connect")
+    def _pg_session_settings(dbapi_conn, _rec):
+        # Set per connection instead of the libpq "options" startup parameter, which PgBouncer-style
+        # poolers (e.g. Neon's -pooler endpoint) reject.
+        with dbapi_conn.cursor() as cur:
+            cur.execute(f"SET statement_timeout = {int(DB_STATEMENT_TIMEOUT_MS)}")
+        dbapi_conn.commit()
 else:
     engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
 
@@ -87,12 +94,12 @@ class User(Base):
     email = Column(String(200), unique=True, nullable=False)
     name = Column(String(120), nullable=False)
     title = Column(String(120))
-    role = Column(String(20), nullable=False)  # college | officer | senior_officer | admin
+    role = Column(String(20), nullable=False)  # college | officer | senior_officer | admin | pending (signed up, no access yet)
     college_id = Column(Integer, ForeignKey("colleges.id"), nullable=True)
     password_hash = Column(String(300), nullable=False)
     avatar_seed = Column(String(60))
     college = relationship("College")
-    __table_args__ = (CheckConstraint("role in ('college','officer','senior_officer','admin')", name="ck_users_role"),)
+    __table_args__ = (CheckConstraint("role in ('college','officer','senior_officer','admin','pending')", name="ck_users_role"),)
 
 
 class Application(Base):
@@ -303,6 +310,40 @@ def _no_version_update(*_):
     raise RuntimeError("document_versions are immutable (write-once)")
 
 
+class Blob(Base):
+    """Insert-only object store (STORAGE_BACKEND=db): originals and derived artefacts shared by every instance."""
+    __tablename__ = "blobs"
+    key = Column(String(200), primary_key=True)
+    sha256 = Column(String(64), nullable=False)
+    size = Column(Integer, nullable=False)
+    data = Column(LargeBinary, nullable=False)
+    created_at = Column(DateTime, default=lambda: now())
+
+
+class UserProfile(Base):
+    """Details collected at first Google sign-in. Officer/admin access is never self-assigned: status=pending
+    until an admin approves; college representatives are approved automatically for a new institution."""
+    __tablename__ = "user_profiles"
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    google_sub = Column(String(64), unique=True)
+    full_name = Column(String(120))
+    requested_role = Column(String(20))          # college | officer
+    institution_name = Column(String(200))
+    aicte_id = Column(String(60))                # AICTE permanent institution ID or application ID
+    state = Column(String(80))
+    designation = Column(String(120))
+    phone = Column(String(20))
+    official_email = Column(String(200))
+    consent_at = Column(DateTime)
+    status = Column(String(12), default="new")   # new (form not filled) | pending | approved | rejected
+    decided_by = Column(String(200))
+    decided_at = Column(DateTime)
+    decision_note = Column(Text)
+    created_at = Column(DateTime, default=lambda: now())
+    user = relationship("User", backref=backref("profile", uselist=False))
+    __table_args__ = (CheckConstraint("status in ('new','pending','approved','rejected')", name="ck_profile_status"),)
+
+
 PG_DDL = [
     "CREATE INDEX IF NOT EXISTS ix_photo_embedding_hnsw ON photo_index USING hnsw (embedding vector_cosine_ops)",
     "CREATE INDEX IF NOT EXISTS ix_doc_text_embedding_hnsw ON documents USING hnsw (text_embedding vector_cosine_ops)",
@@ -312,19 +353,26 @@ PG_DDL = [
     "CREATE TRIGGER trg_audit_append_only BEFORE UPDATE OR DELETE ON audit_log FOR EACH ROW EXECUTE FUNCTION sealcheck_append_only()",
     "DROP TRIGGER IF EXISTS trg_docver_immutable ON document_versions",
     "CREATE TRIGGER trg_docver_immutable BEFORE UPDATE ON document_versions FOR EACH ROW EXECUTE FUNCTION sealcheck_append_only()",
+    "DROP TRIGGER IF EXISTS trg_blobs_insert_only ON blobs",
+    "CREATE TRIGGER trg_blobs_insert_only BEFORE UPDATE OR DELETE ON blobs FOR EACH ROW EXECUTE FUNCTION sealcheck_append_only()",
 ]
 
 
 def init_db():
-    """Dev convenience. On PostgreSQL prefer `alembic upgrade head` (same DDL); this is idempotent either way."""
-    if IS_PG:
-        with engine.begin() as c:
-            c.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-    Base.metadata.create_all(engine)
-    if IS_PG:
-        with engine.begin() as c:
-            for stmt in PG_DDL:
-                c.execute(text(stmt))
+    """Idempotent schema setup. On PostgreSQL it runs under an advisory lock so concurrent cold starts
+    (several serverless instances) cannot race; `alembic upgrade head` produces the same DDL."""
+    if not IS_PG:
+        Base.metadata.create_all(engine)
+        return
+    with engine.begin() as c:
+        c.execute(text("SELECT pg_advisory_xact_lock(726354)"))
+        c.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        Base.metadata.create_all(c)
+        for stmt in PG_DDL:
+            c.execute(text(stmt))
+        c.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_role"))
+        c.execute(text("ALTER TABLE users ADD CONSTRAINT ck_users_role CHECK (role in "
+                       "('college','officer','senior_officer','admin','pending'))"))
 
 
 def reset_db():

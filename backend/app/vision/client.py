@@ -1,6 +1,7 @@
 """Vision backend selector + out-of-process model worker.
 
 VISION_BACKEND=classic (default, dev): pHash + ORB + Hough cues, computed inside the sandbox worker.
+VISION_BACKEND=remote: the same models behind vision_service/ (HTTP, token-authenticated), see vision/remote.py.
 VISION_BACKEND=models: DINOv2-small / DISK+LightGlue / RT-DETR run in ONE long-lived separate process
 (ProcessPoolExecutor, spawn) so the API process never imports torch and models load once (lazily).
 Any failure (torch missing, weights not downloadable, timeout) -> caller falls back to classic and records why.
@@ -12,8 +13,8 @@ from concurrent.futures import ProcessPoolExecutor
 
 BACKEND = os.getenv("VISION_BACKEND", "classic").lower()
 TIMEOUT_S = float(os.getenv("VISION_TIMEOUT_S", "180"))
-DUP_COSINE = float(os.getenv("VISION_DUP_COSINE", "0.90"))
-DUP_INLIERS = int(os.getenv("VISION_DUP_INLIERS", "100"))
+DUP_COSINE = float(os.getenv("VISION_DUP_COSINE", "0.70"))
+DUP_INLIERS = int(os.getenv("VISION_DUP_INLIERS", "150"))
 SUSPECT_COSINE = float(os.getenv("VISION_SUSPECT_COSINE", "0.85"))
 CANDIDATE_MIN_COS = float(os.getenv("VISION_CANDIDATE_MIN_COS", "0.75"))
 _pool = None
@@ -63,10 +64,18 @@ def is_duplicate(m):
 
 
 def analyze_with_models(path, find_candidates):
-    """find_candidates(embedding) -> [{document_id, college_id, path, similarity, layout_hash}] (pgvector kNN)."""
-    d = _call(_describe, path)
-    cands = [c for c in find_candidates(d["embedding"]) if c["similarity"] >= CANDIDATE_MIN_COS and c.get("path")]
-    d["matches"] = _call(_verify, path, cands[:5], d["layout_hash"]) if cands else []
+    """find_candidates(embedding) -> [{document_id, college_id, path, similarity, layout_hash}] (pgvector kNN).
+    VISION_BACKEND=models runs the local worker process; VISION_BACKEND=remote calls vision_service over HTTPS."""
+    if BACKEND == "remote":
+        from . import remote
+        d = remote.describe(path)
+        cands = [c for c in find_candidates(d["embedding"]) if c["similarity"] >= CANDIDATE_MIN_COS and c.get("path")]
+        d["matches"] = remote.verify(path, cands[:5], d["layout_hash"]) if cands else []
+        d["backend"] = "remote"
+    else:
+        d = _call(_describe, path)
+        cands = [c for c in find_candidates(d["embedding"]) if c["similarity"] >= CANDIDATE_MIN_COS and c.get("path")]
+        d["matches"] = _call(_verify, path, cands[:5], d["layout_hash"]) if cands else []
     d["thresholds"] = {"dup_cosine": DUP_COSINE, "dup_inliers": DUP_INLIERS, "suspect_cosine": SUSPECT_COSINE}
     return d
 

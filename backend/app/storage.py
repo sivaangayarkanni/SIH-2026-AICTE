@@ -1,6 +1,6 @@
 """Write-once (WORM) storage for originals.
 
-STORAGE_BACKEND = fs (default) | s3
+STORAGE_BACKEND = fs (default) | s3 | db
 
 * fs - content-addressed files, chmod 0444, never overwritten. Tries `chattr +i`, which needs
        CAP_LINUX_IMMUTABLE, so it usually fails silently in containers. A user with write access
@@ -9,6 +9,10 @@ STORAGE_BACKEND = fs (default) | s3
        WORM_RETENTION_DAYS default 3650). The bucket must be created with Object Lock enabled.
        A local cache copy is still kept for the analysis pipeline. Tested with moto only,
        never against real AWS S3 or MinIO.
+* db - originals AND derived artefacts (sanitised copies) as rows in the `blobs` table (Postgres bytea).
+       Insert-only: a DB trigger rejects UPDATE/DELETE, rows are keyed by name and carry their SHA-256,
+       which is re-checked on every read. Every serverless instance sees the same objects; the local
+       directory is only a cache that is rebuilt on demand (`materialize`).
 """
 from __future__ import annotations
 import base64, hashlib, os, subprocess, time
@@ -83,6 +87,83 @@ class S3Worm(FsWorm):
         return ok, why if not ok else "ok (local + s3)"
 
 
+class DbWorm(FsWorm):
+    name = "db"
+
+    def _insert(self, key: str, data: bytes, sha: str):
+        from .db import SessionLocal, Blob
+        with SessionLocal() as s:
+            if s.get(Blob, key) is None:
+                s.add(Blob(key=key, sha256=sha, size=len(data), data=data))
+                try:
+                    s.commit()
+                except Exception:  # noqa: BLE001  concurrent insert of the same object
+                    s.rollback()
+
+    def put(self, data, sha, ext):
+        local = super().put(data, sha, ext)
+        self._insert(f"{sha}.{ext}", data, sha)
+        return local
+
+    def save_artifact(self, path: str):
+        p = Path(path)
+        if p.exists():
+            data = p.read_bytes()
+            self._insert(blob_key(path), data, hashlib.sha256(data).hexdigest())
+
+    def fetch(self, key: str) -> bytes | None:
+        from .db import SessionLocal, Blob
+        with SessionLocal() as s:
+            b = s.get(Blob, key)
+            if b is None:
+                return None
+            data = bytes(b.data)
+            if hashlib.sha256(data).hexdigest() != b.sha256:
+                raise RuntimeError(f"blob {key}: stored hash does not match content")
+            return data
+
+    def verify(self, key, sha):
+        try:
+            data = self.fetch(key)
+        except RuntimeError:
+            return False, "db hash mismatch"
+        if data is None:
+            return False, "missing in db"
+        return (True, "ok (db)") if hashlib.sha256(data).hexdigest() == sha else (False, "db hash mismatch")
+
+
+def blob_key(path: str) -> str:
+    """Originals are keyed '<sha>.<ext>'; derived artifacts by their path under DATA_DIR (e.g. 'sanitized/doc7_v1.pdf')."""
+    from .config import DATA_DIR, ORIGINALS_DIR
+    p = Path(path)
+    if p.parent == Path(ORIGINALS_DIR):
+        return p.name
+    try:
+        return p.relative_to(DATA_DIR).as_posix()
+    except ValueError:
+        return p.name
+
+
+def materialize(path: str | None) -> str | None:
+    """Make sure a stored file exists in this instance's local cache (db backend); returns the path."""
+    if not path or os.path.exists(path):
+        return path
+    st = get_store()
+    if isinstance(st, DbWorm):
+        data = st.fetch(blob_key(path))
+        if data is not None:
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            tmp = Path(path).with_suffix(".part")
+            tmp.write_bytes(data); tmp.rename(path)
+    return path
+
+
+def save_artifact(path: str | None):
+    st = get_store()
+    if path and isinstance(st, DbWorm):
+        st.save_artifact(path)
+
+
 _store = None
 
 
@@ -90,7 +171,8 @@ def get_store():
     global _store
     if _store is None:
         from .config import ORIGINALS_DIR
-        _store = S3Worm(ORIGINALS_DIR) if os.environ.get("STORAGE_BACKEND", "fs") == "s3" else FsWorm(ORIGINALS_DIR)
+        b = os.environ.get("STORAGE_BACKEND", "fs")
+        _store = S3Worm(ORIGINALS_DIR) if b == "s3" else DbWorm(ORIGINALS_DIR) if b == "db" else FsWorm(ORIGINALS_DIR)
     return _store
 
 

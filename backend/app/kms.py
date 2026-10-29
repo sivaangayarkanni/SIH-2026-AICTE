@@ -93,6 +93,9 @@ class SoftKMS(BaseKMS):
         return f"local-kek-v{self.version}"
 
     def _kek(self, v: int) -> bytes:
+        if os.environ.get("SEALCHECK_MASTER_KEY"):
+            from .config import derive_key
+            return derive_key(f"kms_kek_v{v}")
         p = os.path.join(self.dir, f"kms_kek_v{v}.key")
         if not os.path.exists(p):
             fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

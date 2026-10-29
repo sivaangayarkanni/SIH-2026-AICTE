@@ -2,8 +2,8 @@ import { createContext, useContext, useEffect, useRef, useState, ReactNode } fro
 import { api } from './api'
 import { OidcCfg, startLogin, endSession, refresh, schedule } from './oidc'
 
-export type User = { id: number; email: string; name: string; title: string; role: 'college' | 'officer' | 'senior_officer' | 'admin'; role_label: string; college: string | null; college_id: number | null; avatar_seed: string }
-export type AuthCfg = { mode: 'local' | 'oidc'; idle_timeout_min: number; oidc: OidcCfg | null; demo_accounts: boolean; demo_notice?: string | null }
+export type User = { id: number; email: string; name: string; title: string; role: 'pending' | 'college' | 'officer' | 'senior_officer' | 'admin'; access_status?: string | null; role_label: string; college: string | null; college_id: number | null; avatar_seed: string }
+export type AuthCfg = { mode: 'local' | 'oidc' | 'google'; env?: string; idle_timeout_min: number; oidc: OidcCfg | null; demo_accounts: boolean; password_login?: boolean; google?: { enabled: boolean; notice: string | null }; demo_notice?: string | null }
 type Ctx = { user: User | null; loading: boolean; cfg: AuthCfg | null; login: (e: string, p: string) => Promise<User>; sso: (returnTo?: string) => Promise<void>; logout: (reason?: string) => void; setUser: (u: User | null) => void }
 const Ctx = createContext<Ctx>(null!)
 
@@ -45,5 +45,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={{ user, loading, cfg, login, sso, logout, setUser }}>{children}</Ctx.Provider>
 }
 export const useAuth = () => useContext(Ctx)
-export const isStaff = (u: User | null) => !!u && u.role !== 'college'
+export const isStaff = (u: User | null) => !!u && u.role !== 'college' && u.role !== 'pending'
 export { schedule }

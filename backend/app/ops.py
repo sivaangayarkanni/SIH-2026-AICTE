@@ -162,24 +162,26 @@ def validate_production_config(env: dict | None = None) -> list[str]:
     p = []
     if len(e.get("SEALCHECK_JWT_SECRET", "")) < 32:
         p.append("SEALCHECK_JWT_SECRET must be set (>=32 chars)")
-    if e.get("AUTH_MODE", "local") != "oidc":
-        p.append("AUTH_MODE must be oidc (local demo login is disabled in production)")
+    if e.get("AUTH_MODE", "local") not in ("oidc", "google"):
+        p.append("AUTH_MODE must be oidc or google (local demo login is disabled in production)")
+    if e.get("AUTH_MODE") == "google" and not e.get("PUBLIC_BASE_URL", "").startswith(("https://", "http://localhost:", "http://127.0.0.1:")):
+        p.append("PUBLIC_BASE_URL must be the https:// origin used in the Google redirect URI")
     if e.get("AUTH_MODE") == "oidc" and not e.get("OIDC_ISSUER"):
         p.append("OIDC_ISSUER must be set")
     db = e.get("DATABASE_URL") or e.get("SEALCHECK_DB_URL") or ""
     if not db.startswith(("postgres", "postgresql")):
         p.append("DATABASE_URL must point to PostgreSQL")
-    if e.get("KMS_BACKEND", "soft") == "soft":
-        p.append("KMS_BACKEND must be aws|vault|pkcs11 (soft KMS keeps keys on local disk)")
-    if e.get("STORAGE_BACKEND", "fs") != "s3":
-        p.append("STORAGE_BACKEND must be s3 (filesystem WORM is not tamper-proof)")
-    if e.get("SANDBOX_BACKEND", "auto") == "process":
+    if e.get("KMS_BACKEND", "soft") == "soft" and len(e.get("SEALCHECK_MASTER_KEY", "")) < 32:
+        p.append("KMS_BACKEND must be aws|vault|pkcs11 or set SEALCHECK_MASTER_KEY (>=32 chars) for env-derived keys")
+    if e.get("STORAGE_BACKEND", "fs") not in ("s3", "db"):
+        p.append("STORAGE_BACKEND must be s3 or db (filesystem WORM is not tamper-proof or shared)")
+    if e.get("SANDBOX_BACKEND", "auto") == "process" and e.get("SEALCHECK_ACCEPT_PROCESS_SANDBOX") != "1":
         p.append("SANDBOX_BACKEND=process is not isolated; use namespace or docker")
     if e.get("SEALCHECK_ALLOW_SEED") == "1":
         p.append("SEALCHECK_ALLOW_SEED must not be 1 in production")
     if "*" in e.get("CORS_ORIGINS", ""):
         p.append("CORS_ORIGINS must not contain *")
-    if e.get("QUEUE_BACKEND", "thread") == "thread":
+    if e.get("QUEUE_BACKEND", "thread") == "thread":  # inline (job runs inside the request) is allowed
         p.append("QUEUE_BACKEND should be rq or db (thread queue loses jobs on restart under multiple replicas)")
     return p
 

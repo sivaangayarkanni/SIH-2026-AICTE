@@ -14,8 +14,9 @@ from . import audit, service, reports, qa
 from .config import AUTH_MODE, SESSION_IDLE_MIN, IS_PROD, ENV
 from . import sandbox
 from . import oidc
+from . import storage, google_auth
 from .config import FRONTEND_DIST, SAMPLES_DIR, TEMPLATES_DIR, BACKEND_DIR, JOB_TOKEN_TTL_S, LLM_API_KEY, DATA_DIR
-from .db import (engine, SessionLocal, init_db, User, College, Application, Document, DocumentVersion, Job, Evidence, PiiVault, AuditLog, Override, Notification, now)
+from .db import (engine, SessionLocal, init_db, User, College, Application, Document, DocumentVersion, Job, Evidence, PiiVault, AuditLog, Override, Notification, UserProfile, now)
 from .security import (verify_password, issue_jwt, decode_jwt, issue_job_token, verify_job_token, TokenError, kms,
                        job_token_key)
 from .events import notify_event
@@ -67,7 +68,7 @@ app.add_middleware(CORSMiddleware, allow_origins=[o for o in os.environ.get("COR
                    allow_credentials=True, expose_headers=["X-Request-ID"])
 
 ROLES = ["college", "officer", "senior_officer", "admin"]
-ROLE_LABEL = {"college": "College", "officer": "Scrutiny Officer", "senior_officer": "Senior Officer", "admin": "Administrator"}
+ROLE_LABEL = {"pending": "Awaiting approval", "college": "College", "officer": "Scrutiny Officer", "senior_officer": "Senior Officer", "admin": "Administrator"}
 
 
 @app.middleware("http")
@@ -113,7 +114,12 @@ def current_user(request: Request, s=Depends(db)) -> User:
     u = s.get(User, int(claims["sub"]))
     if not u:
         raise HTTPException(401, "Unknown user")
+    if u.role == "pending" and request.url.path not in PENDING_OK:
+        raise HTTPException(403, "Your account is waiting for onboarding or administrator approval.")
     return u
+
+
+PENDING_OK = {"/api/auth/me", "/api/auth/logout", "/api/auth/profile", "/api/auth/onboarding", "/api/auth/onboarding/options"}
 
 
 def _oidc_user(s, claims) -> User:
@@ -181,14 +187,42 @@ class LoginIn(BaseModel):
 
 def user_out(u: User):
     return {"id": u.id, "email": u.email, "name": u.name, "title": u.title, "role": u.role, "role_label": ROLE_LABEL[u.role],
-            "college_id": u.college_id, "college": u.college.name if u.college else None, "avatar_seed": u.avatar_seed}
+            "college_id": u.college_id, "college": u.college.name if u.college else None, "avatar_seed": u.avatar_seed,
+            "access_status": (u.profile.status if getattr(u, "profile", None) else None)}
 
 
 @app.get("/api/auth/config")
 def auth_config():
     return {"mode": AUTH_MODE, "idle_timeout_min": SESSION_IDLE_MIN,
-            "oidc": oidc.public_config() if AUTH_MODE == "oidc" else None, "demo_accounts": not IS_PROD and AUTH_MODE == "local",
-            "demo_notice": os.environ.get("SEALCHECK_DEMO_NOTICE") or None}
+            "oidc": oidc.public_config() if AUTH_MODE == "oidc" else None, "demo_accounts": DEMO_LOGIN,
+            "password_login": AUTH_MODE == "local", "env": ENV,
+            "google": {"enabled": google_auth.configured(),
+                       "notice": None if google_auth.configured() else "Google sign-in is not configured yet (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET missing)."},
+            "demo_notice": (os.environ.get("SEALCHECK_DEMO_NOTICE") or None) if not IS_PROD else None}
+
+
+DEMO_LOGIN = ENV == "development" and AUTH_MODE == "local"
+app.include_router(google_auth.router)
+
+
+@app.get("/api/auth/onboarding/options")
+def onboarding_options(u: User = Depends(current_user)):
+    return {"states": google_auth.INDIAN_STATES, "email": u.email, "name": u.name,
+            "roles": [{"value": "college", "label": "College / institution representative"},
+                      {"value": "officer", "label": "AICTE officer (requires administrator approval)"}]}
+
+
+@app.get("/api/auth/profile")
+def get_profile(u: User = Depends(current_user), s=Depends(db)):
+    return {"user": user_out(u), "profile": google_auth.profile_out(s.get(UserProfile, u.id))}
+
+
+@app.post("/api/auth/onboarding")
+def onboarding(body: google_auth.OnboardingIn, u: User = Depends(current_user), s=Depends(db)):
+    out = google_auth.submit_onboarding(s, u, body)
+    s.refresh(u)
+    return out | {"user": user_out(u)}
+
 
 
 @app.post("/api/auth/login")
@@ -223,10 +257,39 @@ def logout(request: Request, u: User = Depends(current_user)):
 
 @app.get("/api/auth/demo-accounts")
 def demo_accounts(s=Depends(db)):
-    if IS_PROD or AUTH_MODE != "local":
+    if not DEMO_LOGIN:
         raise HTTPException(404, "Not available")
     return {"password": "Demo@2026", "note": "Seeded demo accounts for the prototype only.",
             "accounts": [user_out(u) for u in s.query(User).order_by(User.id).all()]}
+
+
+@app.get("/api/admin/access-requests")
+def access_requests(status: str = "pending", u: User = Depends(require("admin")), s=Depends(db)):
+    q = s.query(UserProfile)
+    if status != "all":
+        q = q.filter(UserProfile.status == status)
+    return [{"user_id": p.user_id, "email": p.user.email, "role": p.user.role, "created_at": p.created_at.isoformat() if p.created_at else None,
+             "decided_by": p.decided_by, **google_auth.profile_out(p)} for p in q.order_by(UserProfile.created_at.desc()).limit(500)]
+
+
+@app.post("/api/admin/access-requests/{user_id}/approve")
+def approve_access(user_id: int, body: google_auth.DecisionIn, u: User = Depends(require("admin")), s=Depends(db)):
+    return google_auth.decide(s, u, user_id, True, body)
+
+
+@app.post("/api/admin/access-requests/{user_id}/reject")
+def reject_access(user_id: int, body: google_auth.DecisionIn, u: User = Depends(require("admin")), s=Depends(db)):
+    return google_auth.decide(s, u, user_id, False, body)
+
+
+def _vision_status(vclient):
+    b = vclient.BACKEND
+    if b == "remote":
+        from .vision import remote
+        return "remote" if remote.configured() else "remote (VISION_REMOTE_URL/TOKEN missing -> classic)"
+    if b == "models":
+        return "models" if vclient.available() else "models (unavailable -> classic)"
+    return "classic"
 
 
 # ---------------- meta ----------------
@@ -423,7 +486,7 @@ def reanalyze(doc_id: int, u: User = Depends(require("officer", "senior_officer"
 @app.get("/api/documents/{doc_id}/page/{page}")
 def page_image(doc_id: int, page: int, u: User = Depends(current_user), s=Depends(db)):
     d = scoped_doc(s, doc_id, u)
-    san = (d.analysis_json or {}).get("sanitized_path")
+    san = storage.materialize((d.analysis_json or {}).get("sanitized_path"))
     if not san or not Path(san).exists():
         raise HTTPException(404, "Page not available yet")
     if d.mime != "application/pdf":
@@ -453,7 +516,7 @@ def evidence_packet(doc_id: int, u: User = Depends(current_user), s=Depends(db))
     d = scoped_doc(s, doc_id, u)
     an = d.analysis_json or {}
     rows = _audit_for(s, [f"document:{d.id}", f"application:{d.application_id}"])
-    pdf = reports.evidence_packet(d, d.application, an, rows, an.get("sanitized_path") if d.mime == "application/pdf" else None)
+    pdf = reports.evidence_packet(d, d.application, an, rows, storage.materialize(an.get("sanitized_path")) if d.mime == "application/pdf" else None)
     audit.log("evidence.downloaded", actor(u), u.role, f"document:{d.id}")
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="evidence_packet_doc{d.id}.pdf"'})
@@ -578,7 +641,7 @@ def rejection_pdf(app_id: int, u: User = Depends(current_user), s=Depends(db)):
         fs = [{**f, "guidance": _guidance(f.get("rule_id", ""), f)} for f in an.get("findings", [])
               if f.get("outcome") in ("fail", "warn") and f.get("page")]
         if fs and d.mime == "application/pdf":
-            docs.append((d, an.get("sanitized_path"), fs))
+            docs.append((d, storage.materialize(an.get("sanitized_path")), fs))
     pdf = reports.rejection_pdf(a, g["items"], g["reason"], docs)
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="corrections_{a.ref}.pdf"'})
 
@@ -730,12 +793,16 @@ def template_file(name: str):
 
 @app.get("/api/samples")
 def samples():
+    if IS_PROD:
+        return []  # synthetic sample files are a development aid only
     man = SAMPLES_DIR / "manifest.json"
     return json.loads(man.read_text()) if man.exists() else []
 
 
 @app.get("/api/samples/{name}")
 def sample_file(name: str):
+    if IS_PROD:
+        raise HTTPException(404, "Not available")
     p = SAMPLES_DIR / os.path.basename(name)
     if not p.exists():
         raise HTTPException(404)
@@ -807,7 +874,7 @@ def active_backends() -> dict:
     c = LLMClient()
     return {"database": engine.dialect.name + (" + pgvector" if engine.dialect.name == "postgresql" else ""),
             "auth": AUTH_MODE, "sandbox": sandbox.active_backend(), "kms": kms.name, "storage": storage.get_store().name,
-            "queue": service.QUEUE_BACKEND, "vision": os.environ.get("VISION_BACKEND", "classic") + ("" if vclient.available() or os.environ.get("VISION_BACKEND", "classic") == "classic" else " (models unavailable -> classic)"),
+            "queue": service.QUEUE_BACKEND, "vision": _vision_status(vclient),
             "llm": c.provider if c.provider != "none" else "off (rule-based)", "notify": ",".join(notify.channels()),
             "revocation": os.environ.get("REVOCATION_CHECK", "off"),
             "issuer_connectors": len(__import__("app.trust", fromlist=["x"]).load_connectors()), "env": ENV}
