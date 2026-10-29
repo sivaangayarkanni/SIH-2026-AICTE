@@ -1,0 +1,141 @@
+# SealCheck AICTE rule bundle (prototype). Signed with Ed25519 -> aicte_rules.yaml.sig
+# Clause references are prototype mappings to the AICTE Approval Process Handbook (APH) 2024-25 to 2026-27
+# and must be validated by AICTE domain experts before production use.
+bundle:
+  id: aicte-aph-2024-27
+  version: 1.3.0
+  published: "2026-09-15"
+  authority: "AICTE Approval Bureau (prototype bundle)"
+
+document_types:
+  aicte_application_form:
+    label: AICTE Application Form
+    clause: "APH 2024-27 · Ch. I · Online application (prototype ref)"
+    required_fields:
+      - {name: Institution name, pattern: "Institution(?: Name)?\\s*[:\\-]"}
+      - {name: Application reference, pattern: "Application (?:No|Reference|Ref)\\.?\\s*[:\\-]"}
+    validity_required: false
+  land_document:
+    label: Land / Lease Agreement
+    clause: "APH 2024-27 · Appendix 4 · Land requirement (prototype ref)"
+    required_fields:
+      - {name: Survey / plot number, pattern: "Survey (?:No|Number)\\.?\\s*[:\\-]"}
+      - {name: Land area, pattern: "(?:Area|Extent)\\s*[:\\-]\\s*[0-9.]+\\s*(?:acres|acre|sq\\.? ?m)"}
+      - {name: Registration authority, pattern: "Issued By\\s*[:\\-]"}
+    validity_required: true
+    min_remaining_days: 0
+  building_completion:
+    label: Building Completion / Occupancy Certificate
+    clause: "APH 2024-27 · Appendix 5 · Built-up area norms (prototype ref)"
+    required_fields:
+      - {name: Built-up area, pattern: "Built[- ]up Area\\s*[:\\-]"}
+      - {name: Issuing authority, pattern: "Issued By\\s*[:\\-]"}
+    validity_required: false
+  fire_noc:
+    label: Fire Safety NOC
+    clause: "APH 2024-27 · Annexure-2 · Fire & safety compliance (prototype ref)"
+    required_fields:
+      - {name: NOC number, pattern: "NOC (?:No|Number)\\.?\\s*[:\\-]"}
+      - {name: Issuing authority, pattern: "Issued By\\s*[:\\-]"}
+    validity_required: true
+    min_remaining_days: 30
+  faculty_details:
+    label: Faculty Details (with PAN)
+    clause: "APH 2024-27 · Appendix 6 · Faculty cadre ratio (prototype ref)"
+    required_fields:
+      - {name: Faculty PAN list, pattern: "[A-Z]{5}[0-9]{4}[A-Z]"}
+    validity_required: false
+  lab_photos:
+    label: Lab Photos (geotagged)
+    clause: "APH 2024-27 · Appendix 8 · Laboratory & equipment (prototype ref)"
+    required_fields: []
+    validity_required: false
+    photo: true
+  bank_fdr:
+    label: Bank FDR Certificate
+    clause: "APH 2024-27 · Annexure-2 · Corpus / FDR (prototype ref)"
+    required_fields:
+      - {name: FDR amount, pattern: "(?:Amount|Rs\\.?|INR)\\s*[:\\-]?\\s*[0-9,]+"}
+      - {name: Issuing bank, pattern: "Issued By\\s*[:\\-]"}
+    validity_required: true
+    min_remaining_days: 0
+  affidavit:
+    label: Notarised Affidavit
+    clause: "APH 2024-27 · Annexure-3 · Affidavit format (prototype ref)"
+    required_fields:
+      - {name: Deponent, pattern: "(?:Deponent|I,)"}
+    validity_required: false
+  trust_registration:
+    label: Trust / Society Registration
+    clause: "APH 2024-27 · Ch. I · Eligible applicants (prototype ref)"
+    required_fields:
+      - {name: Registration number, pattern: "Registration (?:No|Number)\\.?\\s*[:\\-]"}
+    validity_required: false
+  state_noc:
+    label: State Government NOC
+    clause: "APH 2024-27 · Ch. II · State Government NOC (prototype ref)"
+    required_fields:
+      - {name: NOC number, pattern: "NOC (?:No|Number)\\.?\\s*[:\\-]"}
+    validity_required: true
+    min_remaining_days: 0
+  university_affiliation:
+    label: University Affiliation Consent
+    clause: "APH 2024-27 · Ch. II · Affiliating university consent (prototype ref)"
+    required_fields:
+      - {name: University, pattern: "University"}
+    validity_required: true
+    min_remaining_days: 0
+  closure_resolution:
+    label: Governing Body Closure Resolution
+    clause: "APH 2024-27 · Ch. III · Closure of institution / programme (prototype ref)"
+    required_fields:
+      - {name: Resolution number, pattern: "Resolution (?:No|Number)\\.?\\s*[:\\-]"}
+    validity_required: false
+  foreign_mou:
+    label: Foreign University MoU
+    clause: "APH 2024-27 · Ch. IV · Collaboration with foreign universities (prototype ref)"
+    required_fields:
+      - {name: Partner university, pattern: "University"}
+    validity_required: true
+    min_remaining_days: 180
+
+# Recognised issuing authorities (local registry mirror). An issuer not listed here cannot be confirmed
+# against its source -> "Source Unavailable" (honest status instead of guessing).
+issuer_registry:
+  - Sub-Registrar Office
+  - Directorate of Fire and Rescue Services
+  - Municipal Corporation
+  - Town and Country Planning
+  - State Bank of India
+  - Canara Bank
+  - Indian Bank
+  - Punjab National Bank
+  - Department of Higher Education
+  - Registrar of Societies
+  - Anna University
+  - Dr. A.P.J. Abdul Kalam Technical University
+  - Jawaharlal Nehru Technological University
+  - APJ Abdul Kalam Technological University
+  - Notary Public
+  - AICTE
+
+date_labels: ["Valid Until", "Valid Upto", "Valid Up to", "Expiry Date", "Expires On", "Valid Till"]
+
+categories:
+  - {id: new_institution, label: "New Institution (Grant of Approval)", docs: [aicte_application_form, trust_registration, land_document, building_completion, fire_noc, state_noc, university_affiliation, bank_fdr, affidavit, faculty_details, lab_photos]}
+  - {id: extension_of_approval, label: "Extension of Approval (EoA)", docs: [aicte_application_form, land_document, fire_noc, faculty_details, lab_photos, bank_fdr, affidavit]}
+  - {id: increase_intake, label: "Increase in Intake", docs: [aicte_application_form, building_completion, faculty_details, lab_photos, university_affiliation, affidavit]}
+  - {id: reduction_intake, label: "Reduction in Intake", docs: [aicte_application_form, affidavit, university_affiliation]}
+  - {id: new_course, label: "Introduction of New Course / Programme", docs: [aicte_application_form, faculty_details, lab_photos, university_affiliation, affidavit]}
+  - {id: closure_programme, label: "Closure of Programme", docs: [aicte_application_form, closure_resolution, university_affiliation, affidavit]}
+  - {id: closure_institution, label: "Closure of Institution", docs: [aicte_application_form, closure_resolution, state_noc, university_affiliation, affidavit]}
+  - {id: change_site, label: "Change of Site / Location", docs: [aicte_application_form, land_document, building_completion, fire_noc, state_noc, affidavit]}
+  - {id: change_name, label: "Change of Name of Institution", docs: [aicte_application_form, trust_registration, affidavit]}
+  - {id: change_trust, label: "Change of Trust / Society", docs: [aicte_application_form, trust_registration, bank_fdr, affidavit]}
+  - {id: coed_conversion, label: "Conversion from Women's to Co-Education", docs: [aicte_application_form, university_affiliation, affidavit]}
+  - {id: merger, label: "Merger of Institutions", docs: [aicte_application_form, trust_registration, land_document, building_completion, affidavit]}
+  - {id: foreign_collaboration, label: "Collaboration with Foreign University", docs: [aicte_application_form, foreign_mou, faculty_details, affidavit]}
+  - {id: supernumerary_seats, label: "Supernumerary Seats (OCI / PIO / Foreign Nationals)", docs: [aicte_application_form, affidavit]}
+  - {id: restoration_intake, label: "Restoration of Intake", docs: [aicte_application_form, faculty_details, lab_photos, affidavit]}
+  - {id: second_shift, label: "Introduction of Second Shift", docs: [aicte_application_form, building_completion, faculty_details, lab_photos, affidavit]}
+  - {id: odl_online, label: "Open & Distance / Online Learning Programmes", docs: [aicte_application_form, faculty_details, university_affiliation, affidavit]}

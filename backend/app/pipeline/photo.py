@@ -1,0 +1,112 @@
+"""4C · Infrastructure / Lab Photo Inspector (local equivalent of the GPU pipeline).
+EXIF geotag extraction, perceptual hash + OpenCV ORB keypoint matching for reused photos, and simple
+room-structure cues (straight-line/edge statistics). Production plugs DINOv2/LightGlue + a permissive-licence
+object detector into `PhotoMatcher`/`RoomAnalyzer`."""
+import math
+import numpy as np
+import cv2
+import imagehash
+from PIL import Image, ExifTags
+
+
+def _ratio(v):
+    try:
+        return float(v)
+    except Exception:
+        return float(v[0]) / float(v[1])
+
+
+def exif_info(path: str) -> dict:
+    with Image.open(path) as im:
+        ex = im.getexif()
+        base = {ExifTags.TAGS.get(k, str(k)): v for k, v in ex.items()}
+        gps = ex.get_ifd(0x8825) if ex else {}
+        lat = lon = None
+        if gps and 2 in gps and 4 in gps:
+            def dms(t):
+                return _ratio(t[0]) + _ratio(t[1]) / 60 + _ratio(t[2]) / 3600
+            lat = dms(gps[2]) * (-1 if gps.get(1) in ("S", b"S") else 1)
+            lon = dms(gps[4]) * (-1 if gps.get(3) in ("W", b"W") else 1)
+        return {"width": im.width, "height": im.height, "make": str(base.get("Make", "")) or None,
+                "model": str(base.get("Model", "")) or None, "datetime": str(base.get("DateTime", "")) or None,
+                "software": str(base.get("Software", "")) or None,
+                "gps": {"lat": round(lat, 6), "lon": round(lon, 6)} if lat is not None else None}
+
+
+def phash(path: str) -> str:
+    with Image.open(path) as im:
+        return str(imagehash.phash(im.convert("RGB")))
+
+
+def phash_distance(a: str, b: str) -> int:
+    return int(imagehash.hex_to_hash(a) - imagehash.hex_to_hash(b))
+
+
+def _gray(path, maxdim=900):
+    img = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+    s = maxdim / max(img.shape)
+    return cv2.resize(img, None, fx=s, fy=s) if s < 1 else img
+
+
+def orb_match(a: str, b: str) -> dict:
+    """ORB keypoints + ratio test + RANSAC homography. Many geometric inliers => same physical scene/photo."""
+    orb = cv2.ORB_create(nfeatures=1500)
+    ga, gb = _gray(a), _gray(b)
+    ka, da = orb.detectAndCompute(ga, None)
+    kb, db = orb.detectAndCompute(gb, None)
+    if da is None or db is None:
+        return {"good": 0, "inliers": 0, "inlier_ratio": 0.0}
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING)
+    good = []
+    for m in bf.knnMatch(da, db, k=2):
+        if len(m) == 2 and m[0].distance < 0.75 * m[1].distance:
+            good.append(m[0])
+    inliers = 0
+    if len(good) >= 8:
+        src = np.float32([ka[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+        dst = np.float32([kb[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+        _, mask = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
+        inliers = int(mask.sum()) if mask is not None else 0
+    return {"good": len(good), "inliers": inliers, "inlier_ratio": round(inliers / max(1, len(good)), 3),
+            "keypoints": [len(ka), len(kb)]}
+
+
+def room_cues(path: str) -> dict:
+    g = _gray(path, 800)
+    edges = cv2.Canny(g, 60, 160)
+    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 80, minLineLength=60, maxLineGap=8)
+    horiz = vert = 0
+    for x1, y1, x2, y2 in (lines.reshape(-1, 4) if lines is not None else []):
+        ang = abs(math.degrees(math.atan2(y2 - y1, x2 - x1)))
+        if ang < 12 or ang > 168:
+            horiz += 1
+        elif 78 < ang < 102:
+            vert += 1
+    density = float(edges.mean() / 255)
+    return {"straight_lines": int(0 if lines is None else len(lines)), "horizontal": horiz, "vertical": vert,
+            "edge_density": round(density, 4), "brightness": round(float(g.mean()), 1),
+            "indoor_structure_likely": horiz + vert >= 10,
+            "method": "Canny + probabilistic Hough (local stand-in for room-structure model)"}
+
+
+def haversine_km(a, b):
+    R = 6371
+    la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
+    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(h))
+
+
+def analyze_photo(path: str, candidates: list[dict]) -> dict:
+    ph = phash(path)
+    matches = []
+    for c in candidates:
+        try:
+            d = phash_distance(ph, c["phash"]) if c.get("phash") else 64
+            orb = orb_match(path, c["path"]) if d <= 22 else {"good": 0, "inliers": 0, "inlier_ratio": 0}
+            dup = d <= 8 or orb["inliers"] >= 40
+            if dup or d <= 14:
+                matches.append({"document_id": c["document_id"], "college_id": c["college_id"], "phash_distance": d,
+                                "orb": orb, "duplicate": dup})
+        except Exception:
+            continue
+    return {"exif": exif_info(path), "phash": ph, "matches": matches, "room": room_cues(path)}

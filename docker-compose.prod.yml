@@ -1,0 +1,86 @@
+# UNTESTED: Docker is not available on the build box. The YAML is syntax-checked only.
+# Supply secrets via .env.prod (see docs/PRODUCTION.md). Images: pin by digest in a real deployment.
+name: sealcheck
+x-app-env: &app-env
+  ENV: production
+  DATABASE_URL: postgresql+psycopg://sealcheck:${POSTGRES_PASSWORD:?}@postgres:5432/sealcheck
+  REDIS_URL: redis://redis:6379/0
+  QUEUE_BACKEND: rq
+  AUTH_MODE: oidc
+  OIDC_ISSUER: ${OIDC_ISSUER:?}
+  OIDC_CLIENT_ID: sealcheck-web
+  SEALCHECK_JWT_SECRET: ${SEALCHECK_JWT_SECRET:?}
+  KMS_BACKEND: ${KMS_BACKEND:-vault}
+  VAULT_ADDR: ${VAULT_ADDR:-}
+  VAULT_TOKEN: ${VAULT_TOKEN:-}
+  STORAGE_BACKEND: s3
+  S3_ENDPOINT_URL: http://minio:9000
+  S3_BUCKET: sealcheck-originals
+  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?}
+  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?}
+  AWS_DEFAULT_REGION: us-east-1
+  SANDBOX_BACKEND: namespace
+  CORS_ORIGINS: ${PUBLIC_URL:?}
+  INTEGRITY_INTERVAL_S: "86400"
+  METRICS_TOKEN: ${METRICS_TOKEN:?}
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment: {POSTGRES_USER: sealcheck, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?}", POSTGRES_DB: sealcheck}
+    volumes: [pg:/var/lib/postgresql/data]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U sealcheck"], interval: 10s, retries: 5}
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redis:/data]
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address :9001
+    environment: {MINIO_ROOT_USER: "${MINIO_ROOT_USER:?}", MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?}"}
+    volumes: [minio:/data]
+  minio-init:  # creates the bucket WITH object lock (must be set at creation)
+    image: minio/mc:latest
+    depends_on: [minio]
+    entrypoint: ["sh", "-c", "mc alias set m http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD && mc mb --ignore-existing --with-lock m/sealcheck-originals && mc retention set --default COMPLIANCE 3650d m/sealcheck-originals"]
+    environment: {MINIO_ROOT_USER: "${MINIO_ROOT_USER:?}", MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?}"}
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start", "--import-realm", "--hostname=${KEYCLOAK_HOSTNAME:?}", "--proxy-headers=xforwarded", "--http-enabled=true"]
+    environment: {KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD:?}",
+                  KC_DB: postgres, KC_DB_URL: "jdbc:postgresql://postgres:5432/sealcheck", KC_DB_USERNAME: sealcheck,
+                  KC_DB_PASSWORD: "${POSTGRES_PASSWORD:?}", KC_DB_SCHEMA: keycloak}
+    volumes: ["./deploy/keycloak/sealcheck-realm.json:/opt/keycloak/data/import/sealcheck-realm.json:ro"]
+    depends_on: {postgres: {condition: service_healthy}}
+  migrate:
+    build: .
+    environment: *app-env
+    command: ["alembic", "upgrade", "head"]
+    depends_on: {postgres: {condition: service_healthy}}
+  api:
+    build: .
+    environment: *app-env
+    volumes: [data:/data]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true", "seccomp=unconfined"]  # bwrap needs user namespaces; see deploy/SANDBOX.md
+    cap_drop: [ALL]
+    depends_on: {migrate: {condition: service_completed_successfully}, redis: {condition: service_started}}
+    healthcheck: {test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/readyz')"], interval: 15s}
+    stop_grace_period: 40s
+  worker:
+    build: .
+    environment: *app-env
+    volumes: [data:/data]
+    command: ["python", "-m", "app.queue_worker", "rq"]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true", "seccomp=unconfined"]
+    cap_drop: [ALL]
+    depends_on: [api]
+    stop_grace_period: 120s
+  nginx:
+    image: nginx:1.27-alpine
+    ports: ["443:443", "80:80"]
+    volumes: ["./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro", "${TLS_DIR:?}:/etc/nginx/tls:ro"]
+    depends_on: [api, keycloak]
+volumes: {pg: {}, redis: {}, minio: {}, data: {}}

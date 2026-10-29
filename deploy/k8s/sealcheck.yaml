@@ -1,0 +1,103 @@
+# UNTESTED: never applied to a cluster. YAML syntax-checked only.
+# Expects: a Secret "sealcheck-env" holding the env from docs/PRODUCTION.md; managed Postgres(pgvector)/Redis/S3/Keycloak.
+apiVersion: v1
+kind: Namespace
+metadata: {name: sealcheck}
+---
+apiVersion: batch/v1
+kind: Job
+metadata: {name: sealcheck-migrate, namespace: sealcheck}
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: migrate
+          image: REGISTRY/sealcheck:TAG
+          command: ["alembic", "upgrade", "head"]
+          envFrom: [{secretRef: {name: sealcheck-env}}]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: sealcheck-api, namespace: sealcheck}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: sealcheck-api}}
+  template:
+    metadata: {labels: {app: sealcheck-api}}
+    spec:
+      terminationGracePeriodSeconds: 45
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001}
+      containers:
+        - name: api
+          image: REGISTRY/sealcheck:TAG
+          ports: [{containerPort: 8000}]
+          envFrom: [{secretRef: {name: sealcheck-env}}]
+          env: [{name: SANDBOX_BACKEND, value: namespace}]
+          resources: {requests: {cpu: 500m, memory: 1Gi}, limits: {cpu: "2", memory: 3Gi}}
+          readinessProbe: {httpGet: {path: /readyz, port: 8000}, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /healthz, port: 8000}, periodSeconds: 20}
+          lifecycle: {preStop: {exec: {command: ["sleep", "5"]}}}
+          # bwrap needs unprivileged user namespaces; RuntimeDefault seccomp blocks unshare(CLONE_NEWUSER) on some runtimes.
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]},
+                            seccompProfile: {type: Unconfined}}
+          volumeMounts: [{name: data, mountPath: /data}, {name: tmp, mountPath: /tmp}]
+      volumes: [{name: data, persistentVolumeClaim: {claimName: sealcheck-data}}, {name: tmp, emptyDir: {}}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: sealcheck-worker, namespace: sealcheck}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: sealcheck-worker}}
+  template:
+    metadata: {labels: {app: sealcheck-worker}}
+    spec:
+      terminationGracePeriodSeconds: 120
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001}
+      containers:
+        - name: worker
+          image: REGISTRY/sealcheck:TAG
+          command: ["python", "-m", "app.queue_worker", "rq"]
+          envFrom: [{secretRef: {name: sealcheck-env}}]
+          resources: {requests: {cpu: "1", memory: 2Gi}, limits: {cpu: "4", memory: 6Gi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]},
+                            seccompProfile: {type: Unconfined}}
+          volumeMounts: [{name: data, mountPath: /data}, {name: tmp, mountPath: /tmp}]
+      volumes: [{name: data, persistentVolumeClaim: {claimName: sealcheck-data}}, {name: tmp, emptyDir: {}}]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: sealcheck-data, namespace: sealcheck}
+spec: {accessModes: [ReadWriteMany], resources: {requests: {storage: 50Gi}}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: sealcheck-api, namespace: sealcheck}
+spec: {selector: {app: sealcheck-api}, ports: [{port: 80, targetPort: 8000}]}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: sealcheck-default-deny-egress, namespace: sealcheck}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - ports: [{port: 5432}, {port: 6379}, {port: 443}, {port: 8200}, {port: 53, protocol: UDP}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: sealcheck-api, namespace: sealcheck}
+spec: {minAvailable: 1, selector: {matchLabels: {app: sealcheck-api}}}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: sealcheck-worker, namespace: sealcheck}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: sealcheck-worker}
+  minReplicas: 2
+  maxReplicas: 10
+  metrics: [{type: Resource, resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}}]

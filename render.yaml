@@ -1,0 +1,39 @@
+# Render Blueprint for a public SealCheck DEMO (synthetic data, local demo logins). NOT a production deployment:
+# production needs ENV=production plus the operator inputs in docs/PRODUCTION.md (Postgres, OIDC, KMS, S3/WORM, Redis).
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repo. No secrets live in this file.
+services:
+  - type: web
+    name: sealcheck-demo
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free            # 512 MB RAM; the classic vision backend keeps it within that
+    region: singapore
+    healthCheckPath: /healthz
+    autoDeploy: false
+    # The image defaults to ENV=production, which refuses SQLite, local login and seeding.
+    # The demo overrides ENV and re-seeds a fresh SQLite database on every boot (the free plan has no persistent disk).
+    dockerCommand: >-
+      sh -c "cd /app && python seed/generate_samples.py && python seed/seed_db.py --force
+      && cd /app/backend && exec uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'"
+    envVars:
+      - key: ENV
+        value: demo
+      - key: AUTH_MODE
+        value: local
+      - key: SEALCHECK_DATA_DIR
+        value: /data
+      - key: SEALCHECK_SAMPLES_DIR
+        value: /data/samples
+      - key: SEALCHECK_TEMPLATES_DIR
+        value: /data/templates
+      - key: VISION_BACKEND
+        value: classic
+      - key: RATE_LIMIT
+        value: "on"
+      - key: SEALCHECK_JWT_SECRET
+        generateValue: true
+    # Optional, if you upgrade from the free plan: keep data across restarts (then drop the seed step from dockerCommand)
+    # disk:
+    #   name: sealcheck-data
+    #   mountPath: /data
+    #   sizeGB: 1

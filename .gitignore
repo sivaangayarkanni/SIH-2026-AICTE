@@ -1,0 +1,16 @@
+.venv/
+node_modules/
+frontend/dist/
+backend/data/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+*.key
+*.pem
+.DS_Store
+clickthrough_report.json
+*.zip
+*.db
+*.db-journal
+.ruff_cache/

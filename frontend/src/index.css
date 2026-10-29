@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* AICTE Portal theme. Hex values sampled from aicte.gov.in on 29 Oct 2026: navy #032761 (main nav and section heads),
+   amber #FFB703 (highlight), blue #0079C0 (links), text #343A40, page #F7F7F7, border #D6DDEB, utility bar #181818,
+   orange #F75700. Link text is darkened to #006AA8 (>=4.5:1 on the grey breadcrumb bar), and accent text is darkened to #B34000 so that it reaches 4.5:1 on white. */
+:root, [data-theme='portal'] {
+  --primary: 3 39 97; --primary-fg: 255 255 255; --primary-soft: 230 236 246;
+  --accent: 179 64 0; --accent-soft: 255 243 214;
+  --bg: 247 247 247; --surface: 255 255 255; --surface-2: 242 244 248; --line: 214 221 235; --ink: 33 37 41; --muted: 84 93 105;
+  --side: 3 39 97; --side-ink: 214 221 235; --side-active: 0 121 192;
+  --hero-a: #032761; --hero-b: #021a42;
+  --gov-bar: #181818; --amber: #ffb703; --link: #006aa8; --nav-active: #0079c0;
+}
+[data-theme='aicte'] {
+  --primary: 11 78 162; --primary-fg: 255 255 255; --primary-soft: 232 240 252;
+  --accent: 245 130 32; --accent-soft: 255 241 226;
+  --bg: 244 246 251; --surface: 255 255 255; --surface-2: 248 250 253; --line: 226 232 240; --ink: 15 23 42; --muted: 100 116 139;
+  --side: 9 34 72; --side-ink: 196 208 226; --side-active: 29 111 224;
+  --hero-a: #0b4ea2; --hero-b: #062a5c;
+}
+[data-theme='emerald'] {
+  --primary: 4 120 87; --primary-soft: 228 245 237; --accent: 202 138 4; --accent-soft: 254 246 219;
+  --bg: 243 248 246; --side: 5 46 37; --side-ink: 190 222 210; --side-active: 16 163 116; --hero-a: #047857; --hero-b: #033b2c;
+}
+[data-theme='indigo'] {
+  --primary: 79 70 229; --primary-soft: 237 237 255; --accent: 219 39 119; --accent-soft: 253 232 243;
+  --bg: 245 245 252; --side: 30 27 75; --side-ink: 199 197 240; --side-active: 99 102 241; --hero-a: #4f46e5; --hero-b: #1e1b4b;
+}
+[data-theme='saffron'] {
+  --primary: 221 96 10; --primary-soft: 255 237 222; --accent: 19 136 8; --accent-soft: 226 245 224;
+  --bg: 253 249 244; --side: 10 20 96; --side-ink: 205 210 240; --side-active: 255 153 51; --hero-a: #e8670f; --hero-b: #0a1460;
+}
+.dark {
+  --bg: 10 14 24; --surface: 17 23 37; --surface-2: 23 31 49; --line: 39 50 72; --ink: 228 233 242; --muted: 148 163 184;
+  --primary-soft: 30 41 66; --accent-soft: 56 40 20; --side: 7 10 19; --side-ink: 148 163 184;
+}
+.dark[data-theme='portal'], .dark:not([data-theme]) { --primary: 110 168 255; --primary-fg: 4 12 30; --accent: 255 183 3; --side: 2 20 52; --side-active: 0 121 192; --link: #6cc3ff; --gov-bar: #05070c; --nav-active: #0b4f8a; }
+.dark[data-theme='aicte'] { --primary: 77 148 255; --primary-fg: 6 12 26; }
+.dark[data-theme='emerald'] { --primary: 52 211 153; --primary-fg: 4 24 18; }
+.dark[data-theme='indigo'] { --primary: 129 140 248; --primary-fg: 12 10 40; }
+.dark[data-theme='saffron'] { --primary: 251 146 60; --primary-fg: 30 12 0; }
+
+html, body, #root { height: 100%; }
+body { @apply bg-bg text-ink font-sans antialiased; font-feature-settings: 'cv11', 'ss01'; }
+h1, h2, h3 { letter-spacing: -0.01em; }
+.font-display { @apply font-serif; letter-spacing: -0.015em; }
+*:focus-visible { outline: 2px solid rgb(var(--primary)); outline-offset: 2px; border-radius: 6px; }
+
+@layer components {
+  .card { @apply bg-surface border border-line rounded-2xl shadow-card; }
+  .card-pad { @apply p-5; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[.98]; }
+  .btn-primary { @apply btn bg-primary text-primary-fg hover:brightness-110 shadow-sm; }
+  .btn-accent { @apply btn bg-accent text-white hover:brightness-110 shadow-sm; }
+  .btn-ghost { @apply btn bg-transparent text-ink hover:bg-surface-2 border border-line; }
+  .btn-danger { @apply btn bg-red-600 text-white hover:bg-red-700; }
+  .btn-sm { @apply px-3 py-1.5 text-xs rounded-lg; }
+  .input { @apply w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition; }
+  .label { @apply block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5; }
+  .chip { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap; }
+  .kbd { @apply rounded border border-line bg-surface-2 px-1.5 py-0.5 text-[11px] font-mono text-muted; }
+  .table-head { @apply text-left text-[11px] font-semibold uppercase tracking-wider text-muted; }
+  .skeleton { @apply relative overflow-hidden rounded-lg bg-line/60; }
+  .skeleton::after { content: ''; @apply absolute inset-0 -translate-x-full animate-[shimmer_1.4s_infinite] bg-gradient-to-r from-transparent via-white/40 to-transparent; }
+}
+.grid-bg { background-image: radial-gradient(rgb(255 255 255 / .12) 1px, transparent 1px); background-size: 22px 22px; }
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: rgb(var(--line)); border-radius: 8px; }
+.hl-box { transition: all .25s ease; }
+.hl-box.active { animation: pulseRing 1.4s ease-out infinite; }
+.react-flow__attribution { display: none; }
+
+.hero-art { display: none; }
+@media (min-width: 1024px) and (min-height: 860px) { .hero-art { display: block; } }
+.tour-spot { box-shadow: 0 0 0 9999px rgb(8 15 30 / 0.45); }
+
+/* Portal typography: Open Sans + Noto Sans Devanagari, bundled locally via @fontsource (SIL OFL), no CDN */
+[data-theme='portal'] body, [data-theme='portal'] .font-sans { font-family: 'Open Sans', 'Noto Sans Devanagari', system-ui, sans-serif; }
+[data-theme='portal'] .font-display { font-family: 'Open Sans', 'Noto Sans Devanagari', system-ui, sans-serif; letter-spacing: -0.01em; }
+[lang='hi'], .hindi { font-family: 'Noto Sans Devanagari', 'Open Sans', sans-serif; }
+[data-theme='portal'] .card { border-radius: 6px; box-shadow: 0 1px 2px rgb(3 39 97 / .06); border-color: rgb(var(--line)); }
+[data-theme='portal'] .card-head { background: rgb(var(--primary)); color: #fff; border-top-left-radius: 6px; border-top-right-radius: 6px; }
+[data-theme='portal'] .btn-primary { border-radius: 4px; }
+[data-theme='portal'] .btn-ghost, [data-theme='portal'] .input { border-radius: 4px; }
+[data-theme='portal'] table thead th { background: rgb(var(--primary-soft)); color: rgb(var(--primary)); text-transform: uppercase; letter-spacing: .04em; }
+.dark[data-theme='portal'] table thead th { color: rgb(var(--ink)); }
+[data-theme='portal'] table tbody tr:nth-child(even) { background: rgb(var(--surface-2) / .6); }
+.tricolour { height: 4px; background: linear-gradient(90deg, #ff9933 0 33.33%, #ffffff 33.33% 66.66%, #138808 66.66%); }
+.skip-link { position: absolute; left: 8px; top: -48px; z-index: 100; background: #ffb703; color: #111; padding: 8px 14px; border-radius: 4px; font-weight: 700; }
+.skip-link:focus { top: 8px; }
+/* Focus rings, visible on any background */
+[data-theme='portal'] *:focus-visible { outline: 3px solid #ffb703; outline-offset: 2px; box-shadow: 0 0 0 5px rgb(3 39 97); border-radius: 3px; }
+/* High-contrast mode (all themes) */
+html.hc { --ink: 0 0 0; --muted: 33 37 41; --line: 60 60 60; --bg: 255 255 255; --surface-2: 245 245 245; --primary: 0 0 90; --side: 0 0 0; --side-ink: 255 255 255; }
+html.hc.dark { --ink: 255 255 255; --muted: 230 230 230; --line: 200 200 200; --bg: 0 0 0; --surface: 0 0 0; --surface-2: 20 20 20; --primary: 255 214 0; --primary-fg: 0 0 0; }
+html.hc a { text-decoration: underline; }
+html.hc .text-muted { color: rgb(var(--ink)); }

@@ -1,0 +1,1 @@
+python-pkcs11==0.10.1  # KMS_BACKEND=pkcs11 only (needs a PKCS#11 library from your HSM vendor)

@@ -1,0 +1,114 @@
+[
+  {
+    "file": "svit_application_form.pdf",
+    "college": "SVIT",
+    "doc_type": "aicte_application_form",
+    "expected_status": "Verified",
+    "story": "Genuine DSC-signed form"
+  },
+  {
+    "file": "svit_land_lease.pdf",
+    "college": "SVIT",
+    "doc_type": "land_document",
+    "expected_status": "Verified",
+    "story": "Genuine signed land lease, valid until 2046"
+  },
+  {
+    "file": "svit_fire_noc.pdf",
+    "college": "SVIT",
+    "doc_type": "fire_noc",
+    "expected_status": "Verified",
+    "story": "Genuine fire NOC"
+  },
+  {
+    "file": "svit_faculty_details.pdf",
+    "college": "SVIT",
+    "doc_type": "faculty_details",
+    "expected_status": "Verified",
+    "story": "Faculty list with PANs (masked + vaulted)"
+  },
+  {
+    "file": "svit_bank_fdr.pdf",
+    "college": "SVIT",
+    "doc_type": "bank_fdr",
+    "expected_status": "Verified",
+    "story": "Genuine FDR"
+  },
+  {
+    "file": "svit_affidavit.pdf",
+    "college": "SVIT",
+    "doc_type": "affidavit",
+    "expected_status": "Verified",
+    "story": "Genuine affidavit"
+  },
+  {
+    "file": "svit_lab_cse.jpg",
+    "college": "SVIT",
+    "doc_type": "lab_photos",
+    "expected_status": "Verified",
+    "story": "Original geotagged CSE lab photo"
+  },
+  {
+    "file": "gvce_land_lease_forged.pdf",
+    "college": "GVCE",
+    "doc_type": "land_document",
+    "expected_status": "Mismatch Detected",
+    "story": "Hidden white text + white box over the land area"
+  },
+  {
+    "file": "gvce_fire_noc_tampered.pdf",
+    "college": "GVCE",
+    "doc_type": "fire_noc",
+    "expected_status": "Mismatch Detected",
+    "story": "Text appended in an incremental update after the DSC was applied"
+  },
+  {
+    "file": "gvce_faculty_details.pdf",
+    "college": "GVCE",
+    "doc_type": "faculty_details",
+    "expected_status": "Manual Review Required",
+    "story": "Shares a faculty PAN with SVIT (collusion signal)"
+  },
+  {
+    "file": "gvce_lab_ece.jpg",
+    "college": "GVCE",
+    "doc_type": "lab_photos",
+    "expected_status": "Verified",
+    "story": "Own lab photo, geotagged on campus"
+  },
+  {
+    "file": "diem_building_completion_expired_dsc.pdf",
+    "college": "DIEM",
+    "doc_type": "building_completion",
+    "expected_status": "Expired",
+    "story": "Signed with a DSC whose certificate expired on 30 Jun 2024"
+  },
+  {
+    "file": "diem_fire_noc_expired.pdf",
+    "college": "DIEM",
+    "doc_type": "fire_noc",
+    "expected_status": "Expired",
+    "story": "Fire NOC validity ended 12 Mar 2024"
+  },
+  {
+    "file": "diem_lab_reused.jpg",
+    "college": "DIEM",
+    "doc_type": "lab_photos",
+    "expected_status": "Mismatch Detected",
+    "story": "Re-cropped copy of SVIT's lab photo submitted under a different college/board"
+  },
+  {
+    "file": "mct_affiliation_with_javascript.pdf",
+    "college": "MCT",
+    "doc_type": "university_affiliation",
+    "expected_status": "Manual Review Required",
+    "story": "Contains JavaScript auto-action + embedded .exe (removed by CDR)"
+  },
+  {
+    "file": "mct_fire_noc_unknown_issuer.pdf",
+    "college": "MCT",
+    "doc_type": "fire_noc",
+    "expected_status": "Source Unavailable",
+    "story": "Issuer is not in the registry; cannot be confirmed at source"
+  }
+]

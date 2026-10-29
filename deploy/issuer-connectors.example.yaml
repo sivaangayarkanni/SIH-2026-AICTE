@@ -1,0 +1,11 @@
+# Example only: these endpoints do NOT exist. Each issuing authority's real verification API, contract and credentials
+# have to be obtained by the operator (e.g. state Fire & Rescue NOC portals, sub-registrar e-stamp verification, bank FDR APIs).
+- name: State Fire NOC registry
+  match: Fire and Rescue
+  url: https://fire-noc.example.gov.in/api/verify
+  token_env: FIRE_NOC_API_TOKEN
+  timeout_s: 5
+- name: Sub-Registrar e-stamp verification
+  match: Sub-Registrar
+  url: https://estamp.example.gov.in/api/verify
+  token_env: ESTAMP_API_TOKEN

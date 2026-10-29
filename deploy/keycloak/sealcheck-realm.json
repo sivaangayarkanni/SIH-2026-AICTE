@@ -1,0 +1,230 @@
+{
+  "realm": "sealcheck",
+  "enabled": true,
+  "displayName": "SealCheck (AICTE)",
+  "sslRequired": "all",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "verifyEmail": true,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "maxFailureWaitSeconds": 900,
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(5)",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 900,
+  "ssoSessionMaxLifespan": 36000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "otpPolicyLookAheadWindow": 1,
+  "acrLoaMap": "{\"pwd\":1,\"mfa\":2}",
+  "roles": {
+    "realm": [
+      {
+        "name": "sealcheck-college",
+        "description": "SealCheck role"
+      },
+      {
+        "name": "sealcheck-officer",
+        "description": "SealCheck role"
+      },
+      {
+        "name": "sealcheck-senior-officer",
+        "description": "SealCheck role"
+      },
+      {
+        "name": "sealcheck-admin",
+        "description": "SealCheck role"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "officers",
+      "realmRoles": [
+        "sealcheck-officer"
+      ]
+    },
+    {
+      "name": "senior-officers",
+      "realmRoles": [
+        "sealcheck-senior-officer"
+      ]
+    },
+    {
+      "name": "admins",
+      "realmRoles": [
+        "sealcheck-admin"
+      ]
+    },
+    {
+      "name": "colleges",
+      "realmRoles": [
+        "sealcheck-college"
+      ]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "sealcheck-api",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "sealcheck-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "college_code",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "college_code",
+            "claim.name": "college_code",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "amr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "sealcheck-web",
+      "name": "SealCheck SPA",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "https://sealcheck.example.gov.in/auth/callback"
+      ],
+      "webOrigins": [
+        "https://sealcheck.example.gov.in"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://sealcheck.example.gov.in/login",
+        "use.refresh.tokens": "true",
+        "client.use.lightweight.access.token.enabled": "false"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "sealcheck-api",
+        "acr"
+      ]
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "sealcheck-browser-otp-for-staff",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "description": "Password, then conditional OTP for users holding a staff role",
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "requirement": "ALTERNATIVE",
+          "priority": 10
+        },
+        {
+          "flowAlias": "sealcheck-forms",
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "authenticatorFlow": true
+        }
+      ]
+    },
+    {
+      "alias": "sealcheck-forms",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "flowAlias": "sealcheck-staff-otp",
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "authenticatorFlow": true
+        }
+      ]
+    },
+    {
+      "alias": "sealcheck-staff-otp",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-role",
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "authenticatorConfig": "staff-role"
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "requirement": "REQUIRED",
+          "priority": 20
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "staff-role",
+      "config": {
+        "condUserRole": "sealcheck-officer",
+        "negate": "false"
+      }
+    }
+  ],
+  "browserFlow": "sealcheck-browser-otp-for-staff",
+  "requiredActions": [
+    {
+      "alias": "CONFIGURE_TOTP",
+      "name": "Configure OTP",
+      "providerId": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 10
+    }
+  ],
+  "eventsEnabled": true,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  "users": []
+}

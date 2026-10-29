@@ -1,0 +1,10 @@
+# UNTESTED: Docker was not available in the build environment.
+services:
+  sealcheck:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      SEALCHECK_DATA_DIR: /data
+    volumes: [sealcheck-data:/data]
+volumes:
+  sealcheck-data: {}

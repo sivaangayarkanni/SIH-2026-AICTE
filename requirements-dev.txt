@@ -1,0 +1,8 @@
+-r backend/requirements.txt
+pytest==9.2.0
+playwright==1.64.1
+moto==5.2.5
+fakeredis==2.40.0
+ruff==0.17.3
+mypy==2.4.0
+aiosmtpd==1.4.6
